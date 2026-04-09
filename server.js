@@ -2,9 +2,12 @@ require('dotenv').config();
 
 const express = require('express');
 const session = require('express-session');
+const fs      = require('fs');
+const path    = require('path');
 
-const app  = express();
-const PORT = process.env.PORT || 3001;
+const app        = express();
+const PORT       = process.env.PORT || 3001;
+const STATIC_URL = process.env.STATIC_URL || '';
 
 // ── Middleware ────────────────────────────────────────────────────
 // These run on every request, in order, before any route handler.
@@ -24,6 +27,21 @@ app.use(session({
         maxAge:   30 * 24 * 60 * 60 * 1000,  // 30 days in ms
     },
 }));
+
+// Inject shared stylesheet into index.html when STATIC_URL is configured.
+app.get(['/', '/index.html'], (req, res) => {
+    fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, html) => {
+        if (err) { res.status(404).send('Not found'); return; }
+        if (STATIC_URL) {
+            const injection = [
+                `<link rel="stylesheet" href="${STATIC_URL}/style.css">`,
+                `  <script>window.STATIC_BASE = ${JSON.stringify(STATIC_URL)};</script>`,
+            ].join('\n  ');
+            html = html.replace('<!-- STATIC_INJECT -->', injection);
+        }
+        res.type('html').send(html);
+    });
+});
 
 // Serve everything in /public as static files (roster-defs.js, future UI assets).
 app.use(express.static('public'));

@@ -1,22 +1,12 @@
-/* ── Reset & base ─────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-[hidden] { display: none !important; }
-
+/* ── Local overrides ──────────────────────────────────────────── */
+/* Shared palette lives in bbstatic/public/style.css.            */
 :root {
-    --parchment:   #f0ead8;
-    --parchment-d: #e0d8c0;
-    --ink:         #2a1a0a;
-    --ink-light:   #5a4a3a;
-    --blood:       #8b1a1a;
-    --blood-d:     #6a1010;
-    --border:      #c8b898;
-    --gap:         1.5rem;
+    --text-dim: #5a4a3a;   /* override: page layout uses darker muted text */
+    --gap:      1.5rem;
 }
 
+/* ── Base ─────────────────────────────────────────────────────── */
 body {
-    font-family: 'IBM Plex Mono', monospace;
-    background: var(--parchment);
-    color: var(--ink);
     min-height: 100vh;
     padding: 2rem 1rem;
 }
@@ -56,13 +46,13 @@ h3 {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--ink-light);
+    color: var(--text-dim);
     margin-bottom: 0.75rem;
 }
 
 .subtitle {
     font-size: 0.8rem;
-    color: var(--ink-light);
+    color: var(--text-dim);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-top: 0.25rem;
@@ -70,7 +60,7 @@ h3 {
 
 /* ── Card ─────────────────────────────────────────────────────── */
 .card {
-    background: var(--parchment-d);
+    background: var(--bg-d);
     border: 1px solid var(--border);
     padding: 2rem;
     max-width: 380px;
@@ -95,7 +85,7 @@ h3 {
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--ink-light);
+    color: var(--text-dim);
     cursor: pointer;
 }
 
@@ -112,15 +102,15 @@ label {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--ink-light);
+    color: var(--text-dim);
     margin-top: 0.4rem;
 }
 
 input[type="text"],
 input[type="password"] {
-    background: var(--parchment);
+    background: var(--bg);
     border: 1px solid var(--border);
-    color: var(--ink);
+    color: var(--text);
     font-family: inherit;
     font-size: 0.9rem;
     padding: 0.5rem 0.75rem;
@@ -130,7 +120,7 @@ input[type="password"] {
 
 input[type="text"]:focus,
 input[type="password"]:focus {
-    border-color: var(--ink-light);
+    border-color: var(--text-dim);
 }
 
 .form-error {
@@ -143,7 +133,7 @@ input[type="password"]:focus {
 button[type="submit"],
 .btn-primary {
     background: var(--blood);
-    color: var(--parchment);
+    color: var(--bg);
     border: none;
     font-family: inherit;
     font-size: 0.8rem;
@@ -162,7 +152,7 @@ button[type="submit"]:hover,
 .btn-ghost {
     background: none;
     border: 1px solid var(--border);
-    color: var(--ink-light);
+    color: var(--text-dim);
     font-family: inherit;
     font-size: 0.75rem;
     font-weight: 600;
@@ -172,7 +162,7 @@ button[type="submit"]:hover,
     cursor: pointer;
 }
 
-.btn-ghost:hover { border-color: var(--ink-light); color: var(--ink); }
+.btn-ghost:hover { border-color: var(--text-dim); color: var(--text); }
 
 /* ── Race cards ───────────────────────────────────────────────── */
 .race-grid {
@@ -182,20 +172,20 @@ button[type="submit"]:hover,
 }
 
 .race-card {
-    background: var(--parchment-d);
+    background: var(--bg-d);
     border: 1px solid var(--border);
     padding: 1.5rem;
     cursor: pointer;
     transition: border-color 0.1s;
 }
 
-.race-card:hover { border-color: var(--ink-light); }
+.race-card:hover { border-color: var(--text-dim); }
 
 .race-card h2 { margin-bottom: 0.25rem; }
 
 .race-card .race-meta {
     font-size: 0.72rem;
-    color: var(--ink-light);
+    color: var(--text-dim);
     line-height: 1.6;
 }
 
@@ -215,13 +205,13 @@ button[type="submit"]:hover,
     border: none;
     border-bottom: 2px solid var(--border);
     background: transparent;
-    color: var(--ink);
+    color: var(--text);
     padding: 0.25rem 0;
     width: 100%;
     outline: none;
 }
 
-#team-name:focus { border-bottom-color: var(--ink); }
+#team-name:focus { border-bottom-color: var(--text); }
 #team-name::placeholder { color: var(--border); }
 
 .budget-bar {
@@ -229,7 +219,7 @@ button[type="submit"]:hover,
     align-items: center;
     gap: 0.75rem;
     font-size: 0.75rem;
-    color: var(--ink-light);
+    color: var(--text-dim);
 }
 
 .budget-track {
@@ -267,7 +257,7 @@ button[type="submit"]:hover,
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: var(--parchment-d);
+    background: var(--bg-d);
     border: 1px solid var(--border);
     padding: 0.4rem 0.6rem;
 }
@@ -277,7 +267,7 @@ button[type="submit"]:hover,
     background: transparent;
     font-family: inherit;
     font-size: 0.85rem;
-    color: var(--ink);
+    color: var(--text);
     flex: 1;
     outline: none;
     padding: 0;
@@ -285,14 +275,14 @@ button[type="submit"]:hover,
 
 .roster-item .pos-label {
     font-size: 0.7rem;
-    color: var(--ink-light);
+    color: var(--text-dim);
     white-space: nowrap;
 }
 
 .roster-item button {
     background: none;
     border: none;
-    color: var(--ink-light);
+    color: var(--text-dim);
     cursor: pointer;
     font-size: 0.9rem;
     padding: 0 0.2rem;
@@ -303,7 +293,7 @@ button[type="submit"]:hover,
 
 .hint {
     font-size: 0.72rem;
-    color: var(--ink-light);
+    color: var(--text-dim);
     margin-top: 0.5rem;
 }
 
@@ -312,7 +302,7 @@ button[type="submit"]:hover,
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--parchment-d);
+    background: var(--bg-d);
     border: 1px solid var(--border);
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.4rem;
@@ -320,7 +310,7 @@ button[type="submit"]:hover,
     transition: border-color 0.1s;
 }
 
-.pos-card:hover:not(.pos-card--disabled) { border-color: var(--ink); }
+.pos-card:hover:not(.pos-card--disabled) { border-color: var(--text); }
 
 .pos-card--disabled {
     opacity: 0.4;
@@ -328,7 +318,7 @@ button[type="submit"]:hover,
 }
 
 .pos-card .pos-name { font-size: 0.85rem; font-weight: 600; }
-.pos-card .pos-cost { font-size: 0.75rem; color: var(--ink-light); }
+.pos-card .pos-cost { font-size: 0.75rem; color: var(--text-dim); }
 
 /* ── Builder actions ──────────────────────────────────────────── */
 .builder-actions {
@@ -351,20 +341,20 @@ button[type="submit"]:hover,
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--ink-light);
+    color: var(--text-dim);
     border-bottom: 1px solid var(--border);
     padding: 0.4rem 0.6rem;
 }
 
 .roster-table td {
     padding: 0.5rem 0.6rem;
-    border-bottom: 1px solid var(--parchment-d);
+    border-bottom: 1px solid var(--bg-d);
 }
 
 .roster-table tr:last-child td { border-bottom: none; }
 
-.roster-table .stat { text-align: center; color: var(--ink-light); }
-.roster-table .skills { color: var(--ink-light); font-size: 0.72rem; }
+.roster-table .stat { text-align: center; color: var(--text-dim); }
+.roster-table .skills { color: var(--text-dim); font-size: 0.72rem; }
 
 /* ── Team footer ──────────────────────────────────────────────── */
 .team-footer {
@@ -377,7 +367,7 @@ button[type="submit"]:hover,
 
 .team-footer span {
     font-size: 0.75rem;
-    color: var(--ink-light);
+    color: var(--text-dim);
 }
 
 .team-actions { display: flex; gap: 0.75rem; }
