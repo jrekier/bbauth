@@ -1,0 +1,383 @@
+/* ── Reset & base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+:root {
+    --parchment:   #f0ead8;
+    --parchment-d: #e0d8c0;
+    --ink:         #2a1a0a;
+    --ink-light:   #5a4a3a;
+    --blood:       #8b1a1a;
+    --blood-d:     #6a1010;
+    --border:      #c8b898;
+    --gap:         1.5rem;
+}
+
+body {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--parchment);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+}
+
+/* ── Layout ───────────────────────────────────────────────────── */
+.view {
+    max-width: 860px;
+    margin: 0 auto;
+}
+
+header {
+    margin-bottom: 2rem;
+}
+
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.5rem;
+    letter-spacing: 0.05em;
+    line-height: 1;
+}
+
+h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+}
+
+h3 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-light);
+    margin-bottom: 0.75rem;
+}
+
+.subtitle {
+    font-size: 0.8rem;
+    color: var(--ink-light);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 0.25rem;
+}
+
+/* ── Card ─────────────────────────────────────────────────────── */
+.card {
+    background: var(--parchment-d);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    max-width: 380px;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────── */
+.tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.5rem 1.25rem;
+    margin-bottom: -1px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    cursor: pointer;
+}
+
+.tab.active {
+    color: var(--blood);
+    border-bottom-color: var(--blood);
+}
+
+/* ── Forms ────────────────────────────────────────────────────── */
+form { display: flex; flex-direction: column; gap: 0.6rem; }
+
+label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-light);
+    margin-top: 0.4rem;
+}
+
+input[type="text"],
+input[type="password"] {
+    background: var(--parchment);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    width: 100%;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+    border-color: var(--ink-light);
+}
+
+.form-error {
+    font-size: 0.75rem;
+    color: var(--blood);
+    min-height: 1rem;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+button[type="submit"],
+.btn-primary {
+    background: var(--blood);
+    color: var(--parchment);
+    border: none;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.65rem 1.5rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    align-self: flex-start;
+}
+
+button[type="submit"]:hover,
+.btn-primary:hover { background: var(--blood-d); }
+
+.btn-ghost {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--ink-light);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+}
+
+.btn-ghost:hover { border-color: var(--ink-light); color: var(--ink); }
+
+/* ── Race cards ───────────────────────────────────────────────── */
+.race-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--gap);
+}
+
+.race-card {
+    background: var(--parchment-d);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: border-color 0.1s;
+}
+
+.race-card:hover { border-color: var(--ink-light); }
+
+.race-card h2 { margin-bottom: 0.25rem; }
+
+.race-card .race-meta {
+    font-size: 0.72rem;
+    color: var(--ink-light);
+    line-height: 1.6;
+}
+
+/* ── Builder ──────────────────────────────────────────────────── */
+.builder-top {
+    margin-bottom: 1.5rem;
+}
+
+.team-name-row {
+    margin-bottom: 0.75rem;
+}
+
+#team-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.05em;
+    border: none;
+    border-bottom: 2px solid var(--border);
+    background: transparent;
+    color: var(--ink);
+    padding: 0.25rem 0;
+    width: 100%;
+    outline: none;
+}
+
+#team-name:focus { border-bottom-color: var(--ink); }
+#team-name::placeholder { color: var(--border); }
+
+.budget-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--ink-light);
+}
+
+.budget-track {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+}
+
+.budget-fill {
+    height: 100%;
+    background: var(--blood);
+    transition: width 0.2s;
+}
+
+.builder-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .builder-columns { grid-template-columns: 1fr; }
+}
+
+/* ── Roster list ──────────────────────────────────────────────── */
+#roster-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.roster-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--parchment-d);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+}
+
+.roster-item input {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--ink);
+    flex: 1;
+    outline: none;
+    padding: 0;
+}
+
+.roster-item .pos-label {
+    font-size: 0.7rem;
+    color: var(--ink-light);
+    white-space: nowrap;
+}
+
+.roster-item button {
+    background: none;
+    border: none;
+    color: var(--ink-light);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 0.2rem;
+    line-height: 1;
+}
+
+.roster-item button:hover { color: var(--blood); }
+
+.hint {
+    font-size: 0.72rem;
+    color: var(--ink-light);
+    margin-top: 0.5rem;
+}
+
+/* ── Position cards ───────────────────────────────────────────── */
+.pos-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--parchment-d);
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    transition: border-color 0.1s;
+}
+
+.pos-card:hover:not(.pos-card--disabled) { border-color: var(--ink); }
+
+.pos-card--disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pos-card .pos-name { font-size: 0.85rem; font-weight: 600; }
+.pos-card .pos-cost { font-size: 0.75rem; color: var(--ink-light); }
+
+/* ── Builder actions ──────────────────────────────────────────── */
+.builder-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+/* ── Roster table ─────────────────────────────────────────────── */
+.roster-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.8rem;
+}
+
+.roster-table th {
+    text-align: left;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-light);
+    border-bottom: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+}
+
+.roster-table td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--parchment-d);
+}
+
+.roster-table tr:last-child td { border-bottom: none; }
+
+.roster-table .stat { text-align: center; color: var(--ink-light); }
+.roster-table .skills { color: var(--ink-light); font-size: 0.72rem; }
+
+/* ── Team footer ──────────────────────────────────────────────── */
+.team-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.team-footer span {
+    font-size: 0.75rem;
+    color: var(--ink-light);
+}
+
+.team-actions { display: flex; gap: 0.75rem; }

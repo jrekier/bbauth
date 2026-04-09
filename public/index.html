@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blood Bowl — Team Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ── Auth view ───────────────────────────────────────────── -->
+    <div id="view-auth" class="view">
+        <header>
+            <h1>Blood Bowl</h1>
+            <p class="subtitle">Team Hub</p>
+        </header>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" data-tab="login">Login</button>
+                <button class="tab" data-tab="register">Register</button>
+            </div>
+
+            <form id="form-login">
+                <label>Username</label>
+                <input type="text" name="username" autocomplete="username" required>
+                <label>Password</label>
+                <input type="password" name="password" autocomplete="current-password" required>
+                <p class="form-error" id="login-error"></p>
+                <button type="submit">Login</button>
+            </form>
+
+            <form id="form-register" hidden>
+                <label>Username</label>
+                <input type="text" name="username" autocomplete="username" required>
+                <label>Password</label>
+                <input type="password" name="password" autocomplete="new-password" required>
+                <p class="form-error" id="register-error"></p>
+                <button type="submit">Create Account</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Team builder view ───────────────────────────────────── -->
+    <div id="view-builder" class="view" hidden>
+        <header>
+            <div class="header-row">
+                <h1 id="builder-greeting"></h1>
+                <button class="btn-ghost" id="btn-logout">Logout</button>
+            </div>
+            <p class="subtitle" id="builder-subtitle">Build your team</p>
+        </header>
+
+        <!-- Step 1: race selection -->
+        <div id="step-race">
+            <h2>Choose a Race</h2>
+            <div class="race-grid" id="race-cards"></div>
+        </div>
+
+        <!-- Step 2: roster builder (shown after race selected) -->
+        <div id="step-roster" hidden>
+            <div class="builder-top">
+                <div class="team-name-row">
+                    <input type="text" id="team-name" placeholder="Team name" maxlength="32">
+                </div>
+                <div class="budget-bar">
+                    <span id="budget-label">1,000,000 gp</span>
+                    <div class="budget-track">
+                        <div class="budget-fill" id="budget-fill"></div>
+                    </div>
+                    <span id="budget-remaining"></span>
+                </div>
+            </div>
+
+            <div class="builder-columns">
+                <div class="builder-left">
+                    <h3>Roster <span id="roster-count"></span></h3>
+                    <ul id="roster-list"></ul>
+                    <p class="hint" id="roster-hint"></p>
+                </div>
+                <div class="builder-right">
+                    <h3>Add Player</h3>
+                    <div id="position-cards"></div>
+                </div>
+            </div>
+
+            <div class="builder-actions">
+                <button class="btn-ghost" id="btn-back-race">← Change race</button>
+                <button class="btn-primary" id="btn-save-team">Save Team</button>
+            </div>
+            <p class="form-error" id="builder-error"></p>
+        </div>
+    </div>
+
+    <!-- ── Team display view ───────────────────────────────────── -->
+    <div id="view-team" class="view" hidden>
+        <header>
+            <div class="header-row">
+                <h1 id="team-display-name"></h1>
+                <button class="btn-ghost" id="btn-logout-2">Logout</button>
+            </div>
+            <p class="subtitle" id="team-display-race"></p>
+        </header>
+
+        <table class="roster-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Position</th>
+                    <th>MA</th>
+                    <th>ST</th>
+                    <th>AG</th>
+                    <th>PA</th>
+                    <th>AV</th>
+                    <th>Skills</th>
+                </tr>
+            </thead>
+            <tbody id="roster-table-body"></tbody>
+        </table>
+
+        <div class="team-footer">
+            <span id="team-cost"></span>
+            <div class="team-actions">
+                <button class="btn-ghost" id="btn-edit-team">Edit Team</button>
+                <button class="btn-primary" id="btn-play">Play Online</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="roster-defs.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
