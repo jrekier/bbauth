@@ -36,6 +36,7 @@ app.get(['/', '/index.html'], (req, res) => {
             const injection = [
                 `<link rel="stylesheet" href="${STATIC_URL}/style.css">`,
                 `  <script>window.STATIC_BASE = ${JSON.stringify(STATIC_URL)};</script>`,
+                `  <script src="${STATIC_URL}/banner.js" defer></script>`,
             ].join('\n  ');
             html = html.replace('<!-- STATIC_INJECT -->', injection);
         }
@@ -53,6 +54,7 @@ app.use(express.static('public'));
 app.use('/api', require('./src/routes/auth'));
 app.use('/api', require('./src/routes/team'));
 app.use('/api', require('./src/routes/play'));
+app.use('/api', require('./src/routes/lobby'));
 
 // ── Start ─────────────────────────────────────────────────────────
 app.listen(PORT, () => {

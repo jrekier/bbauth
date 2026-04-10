@@ -21,6 +21,12 @@ header {
     margin-bottom: 2rem;
 }
 
+#main-banner {
+    display: block;
+    width: 100%;
+}
+
+
 .header-row {
     display: flex;
     justify-content: space-between;
@@ -355,6 +361,181 @@ button[type="submit"]:hover,
 
 .roster-table .stat { text-align: center; color: var(--text-dim); }
 .roster-table .skills { color: var(--text-dim); font-size: 0.72rem; }
+
+/* ── Header buttons group ─────────────────────────────────────── */
+.header-btns {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* ── Teams list ───────────────────────────────────────────────── */
+#teams-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.team-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+    padding: 0.9rem 1.1rem;
+}
+
+.team-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1;
+}
+
+.team-card-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 0.05em;
+}
+
+.team-card-meta {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.team-card-sprites {
+    display: flex;
+    gap: 0.1rem;
+    align-items: center;
+}
+
+.team-card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.teams-footer {
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+/* ── Team picker modal ────────────────────────────────────────── */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-overlay[hidden] { display: none; }
+
+.modal-card {
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    min-width: 320px;
+    max-width: 480px;
+    width: 90%;
+}
+
+.modal-card h2 { margin-bottom: 1rem; }
+
+.modal-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+#team-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.team-picker-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: border-color 0.1s;
+}
+
+.team-picker-card:hover { border-color: var(--text); }
+
+.team-picker-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.05em;
+}
+
+.team-picker-meta {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+/* ── Sprite preview canvas ────────────────────────────────────── */
+.sprite-preview {
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+/* ── Lobby ────────────────────────────────────────────────────── */
+.lobby-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+#lobby-open-rooms h3 {
+    margin-bottom: 0.75rem;
+}
+
+.lobby-room-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.lobby-room-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.lobby-room-team {
+    font-size: 1rem;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.05em;
+}
+
+.lobby-room-meta {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.lobby-empty {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    padding: 0.75rem 0;
+}
 
 /* ── Team footer ──────────────────────────────────────────────── */
 .team-footer {

@@ -12,7 +12,7 @@
     <!-- ── Auth view ───────────────────────────────────────────── -->
     <div id="view-auth" class="view">
         <header>
-            <h1>Blood Bowl</h1>
+            <canvas id="main-banner"></canvas>
             <p class="subtitle">Team Hub</p>
         </header>
 
@@ -42,12 +42,54 @@
         </div>
     </div>
 
+    <!-- ── Lobby view (home after login) ──────────────────────── -->
+    <div id="view-lobby" class="view" hidden>
+        <header>
+            <div class="header-row">
+                <h1 id="lobby-greeting"></h1>
+                <div class="header-btns">
+                    <button class="btn-ghost" id="btn-manage-teams">My Teams</button>
+                    <button class="btn-ghost" id="btn-logout-lobby">Logout</button>
+                </div>
+            </div>
+            <p class="subtitle">Online Lobby</p>
+        </header>
+
+        <div class="lobby-actions">
+            <button class="btn-primary" id="btn-create-room">+ Create Game</button>
+        </div>
+
+        <div id="lobby-open-rooms">
+            <h3>Open games</h3>
+            <div id="lobby-room-list"></div>
+        </div>
+    </div>
+
+    <!-- ── Teams list view ─────────────────────────────────────── -->
+    <div id="view-teams" class="view" hidden>
+        <header>
+            <div class="header-row">
+                <h1>My Teams</h1>
+                <div class="header-btns">
+                    <button class="btn-ghost" id="btn-teams-back">← Lobby</button>
+                    <button class="btn-ghost" id="btn-logout-teams">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="teams-list"></div>
+
+        <div class="teams-footer">
+            <button class="btn-primary" id="btn-new-team">+ New Team</button>
+        </div>
+    </div>
+
     <!-- ── Team builder view ───────────────────────────────────── -->
     <div id="view-builder" class="view" hidden>
         <header>
             <div class="header-row">
                 <h1 id="builder-greeting"></h1>
-                <button class="btn-ghost" id="btn-logout">Logout</button>
+                <button class="btn-ghost" id="btn-builder-back">← My Teams</button>
             </div>
             <p class="subtitle" id="builder-subtitle">Build your team</p>
         </header>
@@ -58,7 +100,7 @@
             <div class="race-grid" id="race-cards"></div>
         </div>
 
-        <!-- Step 2: roster builder (shown after race selected) -->
+        <!-- Step 2: roster builder -->
         <div id="step-roster" hidden>
             <div class="builder-top">
                 <div class="team-name-row">
@@ -93,42 +135,19 @@
         </div>
     </div>
 
-    <!-- ── Team display view ───────────────────────────────────── -->
-    <div id="view-team" class="view" hidden>
-        <header>
-            <div class="header-row">
-                <h1 id="team-display-name"></h1>
-                <button class="btn-ghost" id="btn-logout-2">Logout</button>
-            </div>
-            <p class="subtitle" id="team-display-race"></p>
-        </header>
-
-        <table class="roster-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Position</th>
-                    <th>MA</th>
-                    <th>ST</th>
-                    <th>AG</th>
-                    <th>PA</th>
-                    <th>AV</th>
-                    <th>Skills</th>
-                </tr>
-            </thead>
-            <tbody id="roster-table-body"></tbody>
-        </table>
-
-        <div class="team-footer">
-            <span id="team-cost"></span>
-            <div class="team-actions">
-                <button class="btn-ghost" id="btn-edit-team">Edit Team</button>
-                <button class="btn-primary" id="btn-play">Play Online</button>
+    <!-- ── Team picker modal ───────────────────────────────────── -->
+    <div id="team-picker-overlay" class="modal-overlay" hidden>
+        <div class="modal-card">
+            <h2 id="team-picker-title">Pick a Team</h2>
+            <div id="team-picker-list"></div>
+            <div class="modal-actions">
+                <button class="btn-ghost" id="btn-picker-cancel">Cancel</button>
             </div>
         </div>
     </div>
 
     <script src="roster-defs.js"></script>
+    <script src="sprite-preview.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

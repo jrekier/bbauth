@@ -19,6 +19,19 @@ db.exec(`
         roster     TEXT    NOT NULL DEFAULT '[]',
         created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS pending_rooms (
+        id             TEXT    PRIMARY KEY,
+        home_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        home_username  TEXT    NOT NULL,
+        team_id        INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        team_name      TEXT    NOT NULL,
+        race           TEXT    NOT NULL,
+        created_at     INTEGER NOT NULL DEFAULT (unixepoch())
+    );
 `);
+
+// Migrate existing pending_rooms tables that predate the team_id column
+try { db.exec('ALTER TABLE pending_rooms ADD COLUMN team_id INTEGER'); } catch {}
 
 module.exports = db;
