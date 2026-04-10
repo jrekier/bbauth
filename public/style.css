@@ -195,6 +195,43 @@ button[type="submit"]:hover,
     line-height: 1.6;
 }
 
+/* ── Colour picker ────────────────────────────────────────────── */
+.colour-row {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.colour-pick h3 { margin-bottom: 0.5rem; }
+
+.colour-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.colour-swatch {
+    width: 24px;
+    height: 24px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.colour-swatch:hover { border-color: var(--text); }
+
+.colour-swatch--active {
+    border-color: var(--text);
+    outline: 1px solid var(--bg);
+    outline-offset: -3px;
+}
+
+.colour-swatch--taken {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
 /* ── Builder ──────────────────────────────────────────────────── */
 .builder-top {
     margin-bottom: 1.5rem;
@@ -261,11 +298,24 @@ button[type="submit"]:hover,
 
 .roster-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.5rem;
     background: var(--bg-d);
     border: 1px solid var(--border);
     padding: 0.4rem 0.6rem;
+}
+
+.roster-item-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.roster-item-top {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .roster-item input {
@@ -285,7 +335,7 @@ button[type="submit"]:hover,
     white-space: nowrap;
 }
 
-.roster-item button {
+.roster-item .btn-remove {
     background: none;
     border: none;
     color: var(--text-dim);
@@ -295,7 +345,75 @@ button[type="submit"]:hover,
     line-height: 1;
 }
 
-.roster-item button:hover { color: var(--blood); }
+.roster-item .btn-remove:hover { color: var(--blood); }
+
+/* ── Skill chips ──────────────────────────────────────────────── */
+.roster-item-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.skill-chip {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--blood);
+    color: var(--bg);
+    padding: 0.15rem 0.4rem;
+}
+
+.btn-add-skill {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.btn-add-skill:hover { border-color: var(--text-dim); color: var(--text); }
+
+/* ── Skill picker popup ───────────────────────────────────────── */
+.skill-popup {
+    position: absolute;
+    z-index: 200;
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: 320px;
+}
+
+.skill-option {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+}
+
+.skill-option:hover { border-color: var(--text-dim); color: var(--text); }
+
+.skill-option--on {
+    background: var(--blood);
+    border-color: var(--blood);
+    color: var(--bg);
+}
 
 .hint {
     font-size: 0.72rem;

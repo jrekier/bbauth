@@ -25,8 +25,24 @@ function makeToken(userId, username, teamDef) {
     return `${payload}.${sig}`;
 }
 
+function parseColour(raw) {
+    if (!raw) return null;
+    try {
+        const c = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(c) && c.length === 3) return c;
+    } catch {}
+    return null;
+}
+
 function getTeamForUser(teamId, userId) {
-    return db.prepare('SELECT * FROM teams WHERE id = ? AND user_id = ?').get(teamId, userId);
+    const row = db.prepare('SELECT * FROM teams WHERE id = ? AND user_id = ?').get(teamId, userId);
+    if (!row) return null;
+    return {
+        ...row,
+        roster:      JSON.parse(row.roster),
+        homeColour:  parseColour(row.home_colour),
+        awayColour:  parseColour(row.away_colour),
+    };
 }
 
 // GET /api/lobby
@@ -45,7 +61,7 @@ router.post('/lobby', requireAuth, (req, res) => {
     const team = getTeamForUser(teamId, req.session.userId);
     if (!team) return res.status(404).json({ error: 'Team not found' });
 
-    const teamDef = expandTeam({ ...team, roster: JSON.parse(team.roster) });
+    const teamDef = expandTeam(team);
     const roomId  = generateRoomId();
     const token   = makeToken(req.session.userId, req.session.username, teamDef);
 
@@ -71,7 +87,7 @@ router.post('/lobby/:id/join', requireAuth, (req, res) => {
     const team = getTeamForUser(teamId, req.session.userId);
     if (!team) return res.status(404).json({ error: 'Team not found' });
 
-    const teamDef = expandTeam({ ...team, roster: JSON.parse(team.roster) });
+    const teamDef = expandTeam(team);
     const token   = makeToken(req.session.userId, req.session.username, teamDef);
 
     db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(req.params.id);

@@ -25,27 +25,48 @@ function validateRoster(race, roster, res) {
     return true;
 }
 
+function parseColour(raw) {
+    if (!raw) return null;
+    try {
+        const c = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(c) && c.length === 3 && c.every(n => Number.isInteger(n) && n >= 0 && n <= 255))
+            return c;
+    } catch {}
+    return null;
+}
+
+function expandRow(t) {
+    return {
+        ...t,
+        roster:      JSON.parse(t.roster),
+        homeColour:  parseColour(t.home_colour),
+        awayColour:  parseColour(t.away_colour),
+    };
+}
+
 // GET /api/teams — list all teams for the logged-in user
 router.get('/teams', (req, res) => {
     const teams = db.prepare('SELECT * FROM teams WHERE user_id = ? ORDER BY created_at ASC').all(req.session.userId);
-    res.json({ teams: teams.map(t => ({ ...t, roster: JSON.parse(t.roster) })) });
+    res.json({ teams: teams.map(expandRow) });
 });
 
 // GET /api/teams/:id
 router.get('/teams/:id', (req, res) => {
     const team = db.prepare('SELECT * FROM teams WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
     if (!team) return res.status(404).json({ error: 'Team not found' });
-    res.json({ team: { ...team, roster: JSON.parse(team.roster) } });
+    res.json({ team: expandRow(team) });
 });
 
 // POST /api/teams — create a new team
 router.post('/teams', (req, res) => {
-    const { name, race, roster } = req.body;
+    const { name, race, roster, homeColour, awayColour } = req.body;
     if (!name || !race || !Array.isArray(roster))
         return res.status(400).json({ error: 'name, race, and roster are required' });
     if (!validateRoster(race, roster, res)) return;
-    const result = db.prepare('INSERT INTO teams (user_id, name, race, roster) VALUES (?, ?, ?, ?)')
-        .run(req.session.userId, name, race, JSON.stringify(roster));
+    const hc = homeColour ? JSON.stringify(homeColour) : null;
+    const ac = awayColour ? JSON.stringify(awayColour) : null;
+    const result = db.prepare('INSERT INTO teams (user_id, name, race, roster, home_colour, away_colour) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(req.session.userId, name, race, JSON.stringify(roster), hc, ac);
     res.json({ ok: true, id: result.lastInsertRowid });
 });
 
@@ -53,12 +74,14 @@ router.post('/teams', (req, res) => {
 router.put('/teams/:id', (req, res) => {
     const existing = db.prepare('SELECT id FROM teams WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
     if (!existing) return res.status(404).json({ error: 'Team not found' });
-    const { name, race, roster } = req.body;
+    const { name, race, roster, homeColour, awayColour } = req.body;
     if (!name || !race || !Array.isArray(roster))
         return res.status(400).json({ error: 'name, race, and roster are required' });
     if (!validateRoster(race, roster, res)) return;
-    db.prepare('UPDATE teams SET name = ?, race = ?, roster = ? WHERE id = ?')
-        .run(name, race, JSON.stringify(roster), req.params.id);
+    const hc = homeColour ? JSON.stringify(homeColour) : null;
+    const ac = awayColour ? JSON.stringify(awayColour) : null;
+    db.prepare('UPDATE teams SET name = ?, race = ?, roster = ?, home_colour = ?, away_colour = ? WHERE id = ?')
+        .run(name, race, JSON.stringify(roster), hc, ac, req.params.id);
     res.json({ ok: true });
 });
 

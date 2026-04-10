@@ -3,6 +3,33 @@
 // Stats, costs, per-team limits, and sprite data.
 // Served as a static file to the browser; also require()'d server-side.
 
+const COLOURS = [
+    { name: 'Crimson',  rgb: [200, 20,  20]  },
+    { name: 'Royal',    rgb: [20,  50,  180] },
+    { name: 'Forest',   rgb: [20,  110, 35]  },
+    { name: 'Gold',     rgb: [200, 155, 10]  },
+    { name: 'Purple',   rgb: [110, 15,  165] },
+    { name: 'Orange',   rgb: [210, 85,  10]  },
+    { name: 'Teal',     rgb: [15,  135, 130] },
+    { name: 'Maroon',   rgb: [110, 15,  40]  },
+    { name: 'Navy',     rgb: [15,  25,  100] },
+    { name: 'Tan',      rgb: [175, 140, 80]  },
+    { name: 'Slate',    rgb: [60,  80,  110] },
+    { name: 'Rose',     rgb: [185, 55,  100] },
+];
+
+const SKILLS = [
+    'Block', 'Dodge', 'Sure Hands', 'Pass', 'Catch',
+    'Tackle', 'Strip Ball', 'Guard', 'Side Step', 'Leap',
+    'Frenzy', 'Mighty Blow', 'Piling On', 'Juggernaut',
+    'Accurate', 'Strong Arm', 'Nerves of Steel',
+    'Wrestle', 'Shadowing', 'Stab',
+    'Regeneration', 'Thick Skull', 'Stand Firm',
+    'Sprint', 'Sure Feet', 'Stunty',
+    'Two Heads', 'Extra Arms', 'Big Hand',
+    'Loner', 'Wild Animal', 'Bone-head', 'Really Stupid', 'Take Root',
+];
+
 const ROSTER_DEFS = {
     humans: {
         colour: [200, 30, 30],
@@ -95,11 +122,14 @@ function expandTeam(dbTeam) {
             ag:     posDef.ag,
             pa:     posDef.pa,
             av:     posDef.av,
-            skills: [...posDef.skills],
+            skills: Array.isArray(slot.skills) ? [...slot.skills] : [...posDef.skills],
             sprite: posDef.sprite,
         };
     }).filter(Boolean);
-    return { name: dbTeam.name, colour: raceDef.colour, players };
+    // homeColour / awayColour: stored on the team, or fall back to race default
+    const homeColour = dbTeam.homeColour || raceDef.colour;
+    const awayColour = dbTeam.awayColour || raceDef.colour;
+    return { name: dbTeam.name, homeColour, awayColour, players };
 }
 
 // Total gold cost of a roster array [{pos, name}] for a given race.
@@ -113,5 +143,5 @@ function rosterCost(race, roster) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { ROSTER_DEFS, expandTeam, rosterCost };
+    module.exports = { ROSTER_DEFS, SKILLS, COLOURS, expandTeam, rosterCost };
 }

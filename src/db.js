@@ -34,4 +34,8 @@ db.exec(`
 // Migrate existing pending_rooms tables that predate the team_id column
 try { db.exec('ALTER TABLE pending_rooms ADD COLUMN team_id INTEGER'); } catch {}
 
+// Migrate existing teams tables that predate per-team colours
+try { db.exec("ALTER TABLE teams ADD COLUMN home_colour TEXT"); } catch {}
+try { db.exec("ALTER TABLE teams ADD COLUMN away_colour TEXT"); } catch {}
+
 module.exports = db;

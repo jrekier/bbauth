@@ -1,10 +1,12 @@
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────
-let currentUser  = null;   // { userId, username }
-let selectedRace = null;
-let roster       = [];
-let editingTeamId = null;  // null = new team, number = editing existing
+let currentUser      = null;   // { userId, username }
+let selectedRace     = null;
+let roster           = [];
+let editingTeamId    = null;   // null = new team, number = editing existing
+let selectedHomeCol  = null;   // [r,g,b]
+let selectedAwayCol  = null;   // [r,g,b]
 
 // ── View switching ─────────────────────────────────────────────────
 function showView(id) {
@@ -259,16 +261,26 @@ function showBuilder(existingTeam) {
 
     if (existingTeam) {
         selectedRace = existingTeam.race;
-        roster       = existingTeam.roster.slice();
+        const raceDef = ROSTER_DEFS[selectedRace];
+        roster = existingTeam.roster.map(slot => {
+            if (Array.isArray(slot.skills)) return slot;
+            const posDef = raceDef && raceDef.positions.find(p => p.pos === slot.pos);
+            return { ...slot, skills: posDef ? [...posDef.skills] : [] };
+        });
+        selectedHomeCol = existingTeam.homeColour || null;
+        selectedAwayCol = existingTeam.awayColour || null;
         document.getElementById('team-name').value        = existingTeam.name;
         document.getElementById('step-race').hidden       = true;
         document.getElementById('step-roster').hidden     = false;
         renderRoster();
         renderPositions();
+        renderColourPickers();
         updateBudget();
     } else {
-        selectedRace = null;
-        roster       = [];
+        selectedRace    = null;
+        roster          = [];
+        selectedHomeCol = null;
+        selectedAwayCol = null;
         document.getElementById('step-race').hidden       = false;
         document.getElementById('step-roster').hidden     = true;
         renderRaceCards();
@@ -296,14 +308,63 @@ function renderRaceCards() {
 }
 
 function selectRace(race) {
-    selectedRace = race;
-    roster       = [];
+    selectedRace    = race;
+    roster          = [];
+    selectedHomeCol = null;
+    selectedAwayCol = null;
     document.getElementById('team-name').value    = '';
     document.getElementById('step-race').hidden   = true;
     document.getElementById('step-roster').hidden = false;
     renderRoster();
     renderPositions();
+    renderColourPickers();
     updateBudget();
+}
+
+// ── Skill picker ───────────────────────────────────────────────────
+// Shows an inline dropdown of available skills for a specific roster slot.
+function toggleSkillPicker(index, anchorEl) {
+    const existing = document.getElementById('skill-picker-popup');
+    if (existing) { existing.remove(); return; }
+
+    const slot   = roster[index];
+    const popup  = document.createElement('div');
+    popup.id     = 'skill-picker-popup';
+    popup.className = 'skill-popup';
+
+    SKILLS.forEach(skill => {
+        const has  = slot.skills.includes(skill);
+        const btn  = document.createElement('button');
+        btn.type   = 'button';
+        btn.className = 'skill-option' + (has ? ' skill-option--on' : '');
+        btn.textContent = skill;
+        btn.addEventListener('click', () => {
+            if (has) {
+                slot.skills = slot.skills.filter(s => s !== skill);
+            } else {
+                slot.skills = [...slot.skills, skill];
+            }
+            popup.remove();
+            renderRoster();
+            renderPositions();
+        });
+        popup.appendChild(btn);
+    });
+
+    document.body.appendChild(popup);
+    const rect = anchorEl.getBoundingClientRect();
+    popup.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+    popup.style.left = (rect.left  + window.scrollX)     + 'px';
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', function close(e) {
+            if (!popup.contains(e.target) && e.target !== anchorEl) {
+                popup.remove();
+                document.removeEventListener('click', close);
+            }
+        });
+    }, 0);
 }
 
 document.getElementById('btn-back-race').addEventListener('click', () => {
@@ -324,18 +385,30 @@ function renderRoster() {
         li.className = 'roster-item';
         li.innerHTML = `
             <canvas class="sprite-preview" width="32" height="32"></canvas>
-            <input type="text" value="${slot.name}" placeholder="Player name" maxlength="32">
-            <span class="pos-label">${slot.pos}</span>
-            <button title="Remove">×</button>`;
+            <div class="roster-item-body">
+                <div class="roster-item-top">
+                    <input type="text" value="${slot.name}" placeholder="Player name" maxlength="32">
+                    <span class="pos-label">${slot.pos}</span>
+                    <button class="btn-remove" title="Remove">×</button>
+                </div>
+                <div class="roster-item-skills">
+                    ${slot.skills.map(s => `<span class="skill-chip">${s}</span>`).join('')}
+                    <button type="button" class="btn-add-skill">+ skill</button>
+                </div>
+            </div>`;
         if (posDef && posDef.sprite && typeof drawSpritePreview === 'function') {
             drawSpritePreview(li.querySelector('canvas'), posDef.sprite, def.colour);
         }
         li.querySelector('input').addEventListener('input', e => { roster[i].name = e.target.value; });
-        li.querySelector('button').addEventListener('click', () => {
+        li.querySelector('.btn-remove').addEventListener('click', () => {
             roster.splice(i, 1);
             renderRoster();
             renderPositions();
             updateBudget();
+        });
+        li.querySelector('.btn-add-skill').addEventListener('click', e => {
+            e.stopPropagation();
+            toggleSkillPicker(i, e.currentTarget);
         });
         list.appendChild(li);
     });
@@ -369,7 +442,7 @@ function renderPositions() {
         }
         if (!disabled) {
             card.addEventListener('click', () => {
-                roster.push({ pos: pos.pos, name: '' });
+                roster.push({ pos: pos.pos, name: '', skills: [...pos.skills] });
                 renderRoster();
                 renderPositions();
                 updateBudget();
@@ -377,6 +450,45 @@ function renderPositions() {
         }
         container.appendChild(card);
     });
+}
+
+// ── Colour pickers ─────────────────────────────────────────────────
+function renderColourPickers() {
+    renderColourPicker('home-colour-swatches', selectedHomeCol, selectedAwayCol, rgb => {
+        selectedHomeCol = rgb;
+        // If away was using this colour, clear it
+        if (arrEq(selectedAwayCol, rgb)) selectedAwayCol = null;
+        renderColourPickers();
+    });
+    renderColourPicker('away-colour-swatches', selectedAwayCol, selectedHomeCol, rgb => {
+        selectedAwayCol = rgb;
+        // Home always wins — shouldn't happen since we disable it, but guard anyway
+        if (arrEq(selectedHomeCol, rgb)) return;
+        renderColourPickers();
+    });
+}
+
+function renderColourPicker(containerId, current, taken, onSelect) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    COLOURS.forEach(({ name, rgb }) => {
+        const isTaken  = arrEq(rgb, taken);
+        const isActive = arrEq(rgb, current);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'colour-swatch'
+            + (isActive ? ' colour-swatch--active' : '')
+            + (isTaken  ? ' colour-swatch--taken'  : '');
+        btn.title    = isTaken ? `${name} (taken)` : name;
+        btn.disabled = isTaken;
+        btn.style.background = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+        if (!isTaken) btn.addEventListener('click', () => onSelect(rgb));
+        container.appendChild(btn);
+    });
+}
+
+function arrEq(a, b) {
+    return a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
 function updateBudget() {
@@ -396,6 +508,8 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
     err.textContent = '';
 
     if (!name) return (err.textContent = 'Give your team a name');
+    if (!selectedHomeCol) return (err.textContent = 'Pick a home colour');
+    if (!selectedAwayCol) return (err.textContent = 'Pick an away colour');
 
     const def = ROSTER_DEFS[selectedRace];
     if (roster.length < def.min) return (err.textContent = `Need at least ${def.min} players`);
@@ -403,7 +517,11 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
 
     const method = editingTeamId ? 'PUT' : 'POST';
     const path   = editingTeamId ? `/api/teams/${editingTeamId}` : '/api/teams';
-    const data   = await api(method, path, { name, race: selectedRace, roster });
+    const data   = await api(method, path, {
+        name, race: selectedRace, roster,
+        homeColour: selectedHomeCol,
+        awayColour: selectedAwayCol,
+    });
     if (data.error) {
         err.textContent = data.error;
     } else {
