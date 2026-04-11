@@ -691,7 +691,7 @@ function enterPlayingState(url) {
     // on desktop the chat is always open and the toggle is hidden.
     const isTouch = navigator.maxTouchPoints > 0;
     const chatToggle = document.getElementById('btn-chat-toggle');
-    chatToggle.style.display = isTouch ? '' : 'none';
+    chatToggle.style.display = isTouch ? 'block' : 'none';
     if (isTouch) {
         document.getElementById('room-chat').classList.add('room-chat-collapsed');
         chatToggle.textContent = 'Chat ▲';
