@@ -942,7 +942,7 @@ body.game-active #room-sidebar-bar .btn-ghost {
     padding: 0.35rem 0.75rem;
 }
 
-/* Chat toggle hidden on desktop — chat is always fully open */
+/* Chat toggle visibility is set by JS in enterPlayingState() based on touch detection */
 body.game-active #btn-chat-toggle { display: none; }
 
 /* Chat panel: bottom-left cell, scrollable */
@@ -994,8 +994,6 @@ body.game-active .room-messages {
         padding: 0.2rem 0.5rem;
         line-height: 1.2;
     }
-
-    body.game-active #btn-chat-toggle { display: block; }
 
     body.game-active .room-chat {
         grid-column: 1;

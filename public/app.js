@@ -687,10 +687,14 @@ function enterPlayingState(url) {
     document.getElementById('room-sidebar-bar').hidden = false;
     document.body.classList.add('game-active');
 
-    // On mobile the chat starts collapsed; on desktop it is always open
-    if (window.matchMedia('(max-width: 767px)').matches) {
+    // On touch devices the chat starts collapsed and the toggle button is shown;
+    // on desktop the chat is always open and the toggle is hidden.
+    const isTouch = navigator.maxTouchPoints > 0;
+    const chatToggle = document.getElementById('btn-chat-toggle');
+    chatToggle.style.display = isTouch ? '' : 'none';
+    if (isTouch) {
         document.getElementById('room-chat').classList.add('room-chat-collapsed');
-        document.getElementById('btn-chat-toggle').textContent = 'Chat ▲';
+        chatToggle.textContent = 'Chat ▲';
     }
 }
 
