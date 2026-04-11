@@ -170,11 +170,14 @@
             </div>
         </div>
 
-        <!-- Game iframe (mobile playing state) -->
+        <!-- Game iframe -->
         <iframe id="room-game-frame" hidden allow="autoplay" title="Blood Bowl"></iframe>
 
-        <!-- Chat-toggle button (mobile playing state, hidden until game launches) -->
-        <button class="btn-ghost room-chat-toggle" id="btn-chat-toggle" hidden>Chat ▲</button>
+        <!-- Controls bar (exit + mobile chat toggle) — shown only during game -->
+        <div class="room-sidebar-bar" id="room-sidebar-bar" hidden>
+            <button class="btn-ghost" id="btn-exit-game">← Room</button>
+            <button class="btn-ghost" id="btn-chat-toggle">Chat ▲</button>
+        </div>
 
         <div class="room-chat" id="room-chat">
             <div class="room-messages" id="room-messages"></div>
