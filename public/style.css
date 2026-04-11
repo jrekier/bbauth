@@ -871,7 +871,74 @@ button[type="submit"]:hover,
     letter-spacing: 0.05em;
 }
 
-/* ── Mobile overrides for room ────────────────────────────────────── */
+/* ── Game iframe (mobile playing state) ───────────────────────────── */
+#room-game-frame {
+    display: none; /* overridden by .room-playing-mobile below */
+    width: 100%;
+    border: none;
+}
+
+/* ── Chat-toggle button ───────────────────────────────────────────── */
+.room-chat-toggle {
+    width: 100%;
+    margin-bottom: 0;
+    border-bottom: none;
+    font-size: 0.75rem;
+}
+
+/* ── Desktop playing state ────────────────────────────────────────── */
+.room-playing-desktop .room-chat {
+    height: calc(100vh - 160px);
+}
+
+.room-playing-desktop .room-messages {
+    height: 100%;
+}
+
+/* ── Mobile playing state ─────────────────────────────────────────── */
+.room-playing-mobile {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding: 0;
+    overflow: hidden;
+}
+
+.room-playing-mobile header {
+    flex-shrink: 0;
+    padding: 0.75rem 0.75rem 0.5rem;
+    margin-bottom: 0;
+}
+
+.room-playing-mobile #room-game-frame {
+    display: block;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.room-playing-mobile .room-chat-toggle {
+    flex-shrink: 0;
+    display: block;
+}
+
+.room-playing-mobile .room-chat {
+    flex-shrink: 0;
+    max-height: 40dvh;
+    transition: max-height 0.25s ease;
+    overflow: hidden;
+}
+
+.room-playing-mobile .room-chat.room-chat-collapsed {
+    max-height: 0;
+    border-top: none;
+}
+
+.room-playing-mobile .room-messages {
+    height: auto;
+    max-height: calc(40dvh - 48px);
+}
+
+/* ── Mobile overrides for staging room ───────────────────────────── */
 @media (max-width: 540px) {
     .room-players {
         grid-template-columns: 1fr;

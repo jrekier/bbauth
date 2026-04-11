@@ -156,7 +156,7 @@
             <p class="subtitle">Staging Room</p>
         </header>
 
-        <div class="room-players">
+        <div class="room-players" id="room-players">
             <div class="room-player" id="room-player-home">
                 <div class="room-player-name" id="room-home-username">—</div>
                 <div class="room-player-team" id="room-home-team"></div>
@@ -170,7 +170,13 @@
             </div>
         </div>
 
-        <div class="room-chat">
+        <!-- Game iframe (mobile playing state) -->
+        <iframe id="room-game-frame" hidden allow="autoplay" title="Blood Bowl"></iframe>
+
+        <!-- Chat-toggle button (mobile playing state, hidden until game launches) -->
+        <button class="btn-ghost room-chat-toggle" id="btn-chat-toggle" hidden>Chat ▲</button>
+
+        <div class="room-chat" id="room-chat">
             <div class="room-messages" id="room-messages"></div>
             <div class="room-chat-input">
                 <input type="text" id="room-chat-text" placeholder="Type a message…" maxlength="280" disabled>
@@ -178,7 +184,7 @@
             </div>
         </div>
 
-        <div class="room-actions">
+        <div class="room-actions" id="room-actions">
             <button class="btn-primary" id="btn-room-ready" disabled>Ready</button>
             <p class="room-ready-hint" id="room-ready-hint"></p>
         </div>

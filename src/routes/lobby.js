@@ -171,7 +171,16 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
     req.on('close', () => {
         clearInterval(ping);
         getRoom(roomId).delete(req.session.userId);
-        if (getRoom(roomId).size === 0) roomClients.delete(roomId);
+        if (getRoom(roomId).size === 0) {
+            roomClients.delete(roomId);
+            // Defer cleanup so brief reconnects don't wipe the room
+            setTimeout(() => {
+                if (!roomClients.has(roomId)) {
+                    db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(roomId);
+                    db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(roomId);
+                }
+            }, 30000);
+        }
     });
 });
 
@@ -226,10 +235,7 @@ router.post('/room/:id/ready', requireAuth, (req, res) => {
             sendTo(req.params.id, updated.away_user_id, 'launch', {
                 url: `${base}?token=${awayToken}&roomId=${req.params.id}&action=join`,
             });
-
-            db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(req.params.id);
-            db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(req.params.id);
-            setTimeout(() => roomClients.delete(req.params.id), 2000);
+            // Room and messages stay alive; cleanup happens when all SSE clients disconnect.
         }
     }
 

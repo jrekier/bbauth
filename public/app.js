@@ -580,11 +580,15 @@ function connectRoomSSE(roomId) {
     });
 
     es.addEventListener('launch', e => {
-        const d = JSON.parse(e.data);
-        es.close();
-        _roomEventSource = null;
-        _currentRoomId   = null;
-        window.location.href = d.url;
+        const { url } = JSON.parse(e.data);
+        if (window.innerWidth >= 768) {
+            // Desktop: open game in a new tab, keep this page for chat
+            window.open(url, '_blank');
+            enterPlayingStateDesktop();
+        } else {
+            // Mobile: embed game in an iframe, chat becomes a slide-up panel
+            enterPlayingStateMobile(url);
+        }
     });
 
     es.addEventListener('closed', () => {
@@ -678,6 +682,42 @@ async function sendRoomMessage() {
 document.getElementById('btn-room-ready').addEventListener('click', async () => {
     if (!_currentRoomId) return;
     await api('POST', `/api/room/${_currentRoomId}/ready`);
+});
+
+// ── Playing-state transitions ──────────────────────────────────────
+function enterPlayingStateDesktop() {
+    // Hide player cards and ready controls; the chat fills the space
+    document.getElementById('room-players').hidden  = true;
+    document.getElementById('room-actions').hidden  = true;
+    document.getElementById('view-room').classList.add('room-playing-desktop');
+    document.querySelector('#view-room .subtitle').textContent = 'In Game · Chat';
+}
+
+function enterPlayingStateMobile(url) {
+    // Swap player cards + ready button for a full-width game iframe
+    document.getElementById('room-players').hidden = true;
+    document.getElementById('room-actions').hidden = true;
+    const iframe = document.getElementById('room-game-frame');
+    iframe.src   = url;
+    iframe.hidden = false;
+    document.getElementById('view-room').classList.add('room-playing-mobile');
+    // Show chat-toggle button; default chat to collapsed
+    document.getElementById('btn-chat-toggle').hidden = false;
+    document.getElementById('room-chat').classList.add('room-chat-collapsed');
+    document.querySelector('#view-room .subtitle').textContent = 'In Game';
+}
+
+// Chat toggle (mobile playing state)
+document.getElementById('btn-chat-toggle').addEventListener('click', () => {
+    const chat    = document.getElementById('room-chat');
+    const btn     = document.getElementById('btn-chat-toggle');
+    const open    = chat.classList.toggle('room-chat-collapsed');
+    btn.textContent = open ? 'Chat ▲' : 'Chat ▼';
+    if (!open) {
+        // Scrolled to bottom when opening
+        const msgs = document.getElementById('room-messages');
+        msgs.scrollTop = msgs.scrollHeight;
+    }
 });
 
 // Leave room
