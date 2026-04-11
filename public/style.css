@@ -118,7 +118,7 @@ input[type="password"] {
     border: 1px solid var(--border);
     color: var(--text);
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: max(1rem, 16px);
     padding: 0.5rem 0.75rem;
     outline: none;
     width: 100%;
