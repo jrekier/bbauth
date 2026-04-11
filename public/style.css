@@ -942,12 +942,8 @@ body.game-active #room-sidebar-bar .btn-ghost {
     padding: 0.35rem 0.75rem;
 }
 
-/* Chat toggle visibility is set by JS in enterPlayingState() based on touch detection */
+/* Chat toggle visibility controlled by JS in enterPlayingState() */
 body.game-active #btn-chat-toggle { display: none; }
-
-@media (pointer: coarse) {
-    body.game-active #btn-chat-toggle { display: block; }
-}
 
 /* Chat panel: bottom-left cell, scrollable */
 body.game-active .room-chat {
@@ -969,54 +965,33 @@ body.game-active .room-messages {
     max-height: none;
 }
 
-/* ── Mobile: iframe fills container, bar + chat pinned absolutely ──── */
+/* ── Mobile: flex column — iframe shrinks, bar stays at bottom ──────── */
 @media (max-width: 767px) {
     body.game-active #view-room {
-        /* keep grid-template-columns from desktop override, but collapse rows */
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr;
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
     }
 
-    /* Game frame fills the whole fixed container */
+    /* iframe takes all remaining space and cannot overflow */
     body.game-active #room-game-frame {
-        grid-column: 1;
-        grid-row: 1;
-        width: 100%;
-        height: 100%;
+        flex: 1 1 0;
         min-height: 0;
-    }
-
-    /* Bar pinned to bottom — out of grid flow, can never be pushed off-screen */
-    body.game-active #room-sidebar-bar {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        width: 100%;
+        height: auto;
         grid-column: unset;
         grid-row: unset;
-        border-right: none;
-        border-bottom: none;
-        border-top: 1px solid var(--border);
-        background: var(--bg);
-        z-index: 10;
     }
 
-    /* Chat panel anchored just above the bar */
+    /* chat slides in between iframe and bar */
     body.game-active .room-chat {
-        position: absolute;
-        bottom: 2.5rem;
-        left: 0;
-        right: 0;
+        flex: 0 0 auto;
         grid-column: unset;
         grid-row: unset;
         border-right: none;
-        flex: none;
         max-height: 35dvh;
         overflow: hidden;
         transition: max-height 0.2s ease;
-        background: var(--bg);
-        z-index: 9;
     }
 
     body.game-active .room-chat.room-chat-collapsed { max-height: 0; }
@@ -1025,6 +1000,19 @@ body.game-active .room-messages {
         flex: none;
         height: auto;
         max-height: calc(35dvh - 44px);
+    }
+
+    /* bar at the very bottom, natural height */
+    body.game-active #room-sidebar-bar {
+        flex: 0 0 auto;
+        position: static;
+        grid-column: unset;
+        grid-row: unset;
+        border-right: none;
+        border-bottom: none;
+        border-top: 1px solid var(--border);
+        background: unset;
+        z-index: unset;
     }
 }
 
