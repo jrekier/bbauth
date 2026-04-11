@@ -26,7 +26,7 @@ router.post('/register', async (req, res) => {
 
     req.session.userId   = Number(lastInsertRowid);
     req.session.username = username;
-    res.json({ ok: true, username });
+    res.json({ ok: true, userId: Number(lastInsertRowid), username });
 });
 
 // POST /api/login
@@ -46,7 +46,7 @@ router.post('/login', async (req, res) => {
 
     req.session.userId   = user.id;
     req.session.username = user.username;
-    res.json({ ok: true, username: user.username });
+    res.json({ ok: true, userId: user.id, username: user.username });
 });
 
 // POST /api/logout

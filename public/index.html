@@ -146,6 +146,44 @@
         </div>
     </div>
 
+    <!-- ── Staging room view ──────────────────────────────────── -->
+    <div id="view-room" class="view" hidden>
+        <header>
+            <div class="header-row">
+                <h1 id="room-id-title"></h1>
+                <button class="btn-ghost" id="btn-room-leave">Leave</button>
+            </div>
+            <p class="subtitle">Staging Room</p>
+        </header>
+
+        <div class="room-players">
+            <div class="room-player" id="room-player-home">
+                <div class="room-player-name" id="room-home-username">—</div>
+                <div class="room-player-team" id="room-home-team"></div>
+                <div class="room-player-status" id="room-home-status">Not ready</div>
+            </div>
+            <div class="room-vs">VS</div>
+            <div class="room-player" id="room-player-away">
+                <div class="room-player-name" id="room-away-username">—</div>
+                <div class="room-player-team" id="room-away-team">Waiting for opponent…</div>
+                <div class="room-player-status" id="room-away-status"></div>
+            </div>
+        </div>
+
+        <div class="room-chat">
+            <div class="room-messages" id="room-messages"></div>
+            <div class="room-chat-input">
+                <input type="text" id="room-chat-text" placeholder="Type a message…" maxlength="280" disabled>
+                <button class="btn-ghost" id="btn-room-send" disabled>Send</button>
+            </div>
+        </div>
+
+        <div class="room-actions">
+            <button class="btn-primary" id="btn-room-ready" disabled>Ready</button>
+            <p class="room-ready-hint" id="room-ready-hint"></p>
+        </div>
+    </div>
+
     <!-- ── Team picker modal ───────────────────────────────────── -->
     <div id="team-picker-overlay" class="modal-overlay" hidden>
         <div class="modal-card">

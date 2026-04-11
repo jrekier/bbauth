@@ -52,7 +52,7 @@ document.getElementById('form-login').addEventListener('submit', async e => {
     if (data.error) {
         document.getElementById('login-error').textContent = data.error;
     } else {
-        currentUser = { username: data.username };
+        currentUser = { userId: data.userId, username: data.username };
         showLobby();
     }
 });
@@ -64,7 +64,7 @@ document.getElementById('form-register').addEventListener('submit', async e => {
     if (data.error) {
         document.getElementById('register-error').textContent = data.error;
     } else {
-        currentUser = { username: data.username };
+        currentUser = { userId: data.userId, username: data.username };
         showLobby();
     }
 });
@@ -140,14 +140,15 @@ document.getElementById('btn-manage-teams').addEventListener('click', () => {
 async function createRoom(teamId) {
     const data = await api('POST', '/api/lobby', { teamId });
     if (data.error) return alert(data.error);
-    window.location.href = data.url;
+    hideLobby();
+    showRoom(data.roomId);
 }
 
 async function joinRoom(roomId, teamId) {
     const data = await api('POST', `/api/lobby/${roomId}/join`, { teamId });
     if (data.error) return alert(data.error);
     hideLobby();
-    window.location.href = data.url;
+    showRoom(data.roomId);
 }
 
 // ── Team picker modal ──────────────────────────────────────────────
@@ -527,6 +528,166 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
     } else {
         showTeams();
     }
+});
+
+// ── Staging room ───────────────────────────────────────────────────
+let _roomEventSource = null;
+let _currentRoomId   = null;
+
+function showRoom(roomId) {
+    _currentRoomId = roomId;
+    document.getElementById('room-id-title').textContent = `Room ${roomId}`;
+    document.getElementById('room-messages').innerHTML   = '';
+    document.getElementById('room-chat-text').value      = '';
+    document.getElementById('room-chat-text').disabled   = true;
+    document.getElementById('btn-room-send').disabled    = true;
+    document.getElementById('btn-room-ready').disabled   = true;
+    document.getElementById('btn-room-ready').classList.remove('btn-ready-on');
+    document.getElementById('room-ready-hint').textContent = '';
+    showView('view-room');
+    connectRoomSSE(roomId);
+}
+
+function connectRoomSSE(roomId) {
+    if (_roomEventSource) { _roomEventSource.close(); _roomEventSource = null; }
+    const es = new EventSource(`/api/room/${roomId}/events`);
+    _roomEventSource = es;
+
+    es.addEventListener('init', e => {
+        const d = JSON.parse(e.data);
+        renderRoomInit(d);
+    });
+
+    es.addEventListener('joined', e => {
+        const d = JSON.parse(e.data);
+        document.getElementById('room-away-username').textContent = d.awayUsername;
+        document.getElementById('room-away-team').textContent     = `${d.awayTeamName} · ${d.awayRace}`;
+        document.getElementById('room-away-status').textContent   = 'Not ready';
+        document.getElementById('room-chat-text').disabled  = false;
+        document.getElementById('btn-room-send').disabled   = false;
+        document.getElementById('btn-room-ready').disabled  = false;
+        appendSystemMessage(`${d.awayUsername} joined the room.`);
+    });
+
+    es.addEventListener('message', e => {
+        const d = JSON.parse(e.data);
+        appendChatMessage(d.username, d.message);
+    });
+
+    es.addEventListener('ready', e => {
+        const d = JSON.parse(e.data);
+        updateReadyState(d.homeReady, d.awayReady);
+    });
+
+    es.addEventListener('launch', e => {
+        const d = JSON.parse(e.data);
+        es.close();
+        _roomEventSource = null;
+        _currentRoomId   = null;
+        window.location.href = d.url;
+    });
+
+    es.addEventListener('closed', () => {
+        es.close();
+        _roomEventSource = null;
+        _currentRoomId   = null;
+        showLobby();
+    });
+}
+
+function renderRoomInit(state) {
+    document.getElementById('room-home-username').textContent = state.homeUsername;
+    document.getElementById('room-home-team').textContent     = `${state.homeTeamName} · ${state.homeRace}`;
+
+    const hasAway = !!state.awayUsername;
+    document.getElementById('room-away-username').textContent =
+        hasAway ? state.awayUsername : '—';
+    document.getElementById('room-away-team').textContent =
+        hasAway ? `${state.awayTeamName} · ${state.awayRace}` : 'Waiting for opponent…';
+    document.getElementById('room-away-status').textContent =
+        hasAway ? (state.awayReady ? 'Ready!' : 'Not ready') : '';
+
+    document.getElementById('room-chat-text').disabled = !hasAway;
+    document.getElementById('btn-room-send').disabled  = !hasAway;
+    document.getElementById('btn-room-ready').disabled = !hasAway;
+
+    state.messages.forEach(m => appendChatMessage(m.username, m.message));
+    updateReadyState(state.homeReady, state.awayReady);
+}
+
+function updateReadyState(homeReady, awayReady) {
+    const homeStatus = document.getElementById('room-home-status');
+    const awayStatus = document.getElementById('room-away-status');
+    homeStatus.textContent = homeReady ? 'Ready!' : 'Not ready';
+    homeStatus.className   = 'room-player-status' + (homeReady ? ' room-status-ready' : '');
+    awayStatus.textContent = awayReady ? 'Ready!' : 'Not ready';
+    awayStatus.className   = 'room-player-status' + (awayReady ? ' room-status-ready' : '');
+
+    const hint = document.getElementById('room-ready-hint');
+    const btn  = document.getElementById('btn-room-ready');
+    if (homeReady && awayReady) {
+        hint.textContent = 'Launching…';
+    } else if (homeReady) {
+        hint.textContent = 'Waiting for opponent to ready up…';
+        btn.classList.add('btn-ready-on');
+    } else {
+        hint.textContent = '';
+        btn.classList.remove('btn-ready-on');
+    }
+}
+
+function appendChatMessage(username, text) {
+    const msgs = document.getElementById('room-messages');
+    const div  = document.createElement('div');
+    div.className = 'room-message';
+    const isSelf = username === currentUser.username;
+    div.innerHTML = `<span class="room-msg-author${isSelf ? ' room-msg-self' : ''}">${escHtml(username)}</span>`
+        + `<span class="room-msg-text">${escHtml(text)}</span>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendSystemMessage(text) {
+    const msgs = document.getElementById('room-messages');
+    const div  = document.createElement('div');
+    div.className = 'room-message room-message-system';
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function escHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Send chat message
+document.getElementById('btn-room-send').addEventListener('click', sendRoomMessage);
+document.getElementById('room-chat-text').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendRoomMessage();
+});
+
+async function sendRoomMessage() {
+    const input = document.getElementById('room-chat-text');
+    const text  = input.value.trim();
+    if (!text || !_currentRoomId) return;
+    input.value = '';
+    await api('POST', `/api/room/${_currentRoomId}/message`, { message: text });
+}
+
+// Toggle ready
+document.getElementById('btn-room-ready').addEventListener('click', async () => {
+    if (!_currentRoomId) return;
+    await api('POST', `/api/room/${_currentRoomId}/ready`);
+});
+
+// Leave room
+document.getElementById('btn-room-leave').addEventListener('click', async () => {
+    if (_roomEventSource) { _roomEventSource.close(); _roomEventSource = null; }
+    if (_currentRoomId) {
+        await api('DELETE', `/api/lobby/${_currentRoomId}`);
+        _currentRoomId = null;
+    }
+    showLobby();
 });
 
 // ── Banner ─────────────────────────────────────────────────────────
