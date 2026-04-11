@@ -990,13 +990,6 @@ body.game-active .room-messages {
         border-right: none;
         border-bottom: none;
         border-top: 1px solid var(--border);
-        padding: 0.2rem 0.4rem;
-    }
-
-    body.game-active #room-sidebar-bar .btn-ghost {
-        font-size: 0.6rem;
-        padding: 0.2rem 0.5rem;
-        line-height: 1.2;
     }
 
     body.game-active .room-chat {
