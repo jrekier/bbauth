@@ -142,6 +142,27 @@ function rosterCost(race, roster) {
     }, 0);
 }
 
+const PLAYER_NAMES = {
+    humans: [
+        'Aldric', 'Brennan', 'Cedric', 'Daran', 'Edmund', 'Farrell', 'Gareth', 'Hadwin',
+        'Ivar', 'Jareth', 'Kenrick', 'Leoric', 'Merton', 'Norbert', 'Oswin', 'Percival',
+        'Quinn', 'Roderick', 'Sigmar', 'Thorn', 'Ulric', 'Vance', 'Wulfric', 'Xander',
+        'Yorick', 'Zane', 'Aethelred', 'Bolverk', 'Conrad', 'Dagmar',
+    ],
+    orcs: [
+        'Azog', 'Bolg', 'Crusha', 'Drukk', 'Elog', 'Fangrak', 'Gorgut', 'Harnak',
+        'Ironfist', 'Jagg', 'Krumpa', 'Lugrak', 'Morg', 'Nurgit', 'Orrak', 'Pugna',
+        'Ragnok', 'Skrag', 'Torgoch', 'Ugluk', 'Vorg', 'Waaghnak', 'Xurg', 'Yagrak',
+        'Zograt', 'Burrak', 'Dakkag', 'Gutrot', 'Hrakka', 'Kilgor',
+    ],
+};
+
+function randomPlayerName(race) {
+    const pool = PLAYER_NAMES[race] || [];
+    if (pool.length === 0) return '';
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
 if (typeof module !== 'undefined') {
-    module.exports = { ROSTER_DEFS, SKILLS, COLOURS, expandTeam, rosterCost };
+    module.exports = { ROSTER_DEFS, SKILLS, COLOURS, PLAYER_NAMES, expandTeam, rosterCost, randomPlayerName };
 }

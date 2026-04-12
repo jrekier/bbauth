@@ -443,7 +443,7 @@ function renderPositions() {
         }
         if (!disabled) {
             card.addEventListener('click', () => {
-                roster.push({ pos: pos.pos, name: '', skills: [...pos.skills] });
+                roster.push({ pos: pos.pos, name: randomPlayerName(selectedRace), skills: [...pos.skills] });
                 renderRoster();
                 renderPositions();
                 updateBudget();
