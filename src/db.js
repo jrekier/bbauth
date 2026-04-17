@@ -24,9 +24,9 @@ db.exec(`
         id             TEXT    PRIMARY KEY,
         home_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         home_username  TEXT    NOT NULL,
-        team_id        INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-        team_name      TEXT    NOT NULL,
-        race           TEXT    NOT NULL,
+        team_id        INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+        team_name      TEXT,
+        race           TEXT,
         created_at     INTEGER NOT NULL DEFAULT (unixepoch())
     );
 

@@ -8,6 +8,14 @@ let editingTeamId    = null;   // null = new team, number = editing existing
 let selectedHomeCol  = null;   // [r,g,b]
 let selectedAwayCol  = null;   // [r,g,b]
 
+// ── Helpers ────────────────────────────────────────────────────────
+function raceLogoUrl(race) {
+    const def = ROSTER_DEFS[race];
+    if (!def || !def.logo) return null;
+    const base = window.STATIC_BASE || '';
+    return base ? `${base}/${def.logo}` : def.logo;
+}
+
 // ── View switching ─────────────────────────────────────────────────
 function showView(id) {
     document.querySelectorAll('.view').forEach(v => v.hidden = true);
@@ -115,37 +123,44 @@ function renderLobbyRooms(rooms) {
     rooms.forEach(room => {
         const card = document.createElement('div');
         card.className = 'lobby-room-card';
+        const teamLabel  = room.team_name ? `${room.team_name} · ${room.race}` : 'No team selected yet';
+        const homeLogoUrl = room.race ? raceLogoUrl(room.race) : null;
+        const homeLogoHtml = homeLogoUrl
+            ? `<img class="race-logo" src="${homeLogoUrl}" alt="${room.race}">`
+            : `<div class="lobby-room-logo-slot"></div>`;
         card.innerHTML = `
-            <div class="lobby-room-info">
-                <span class="lobby-room-team">${room.team_name}</span>
-                <span class="lobby-room-meta">${room.home_username} · ${room.race}</span>
+            <div class="lobby-room-logos">
+                ${homeLogoHtml}
+                <div class="lobby-room-logo-slot"></div>
             </div>
-            <button class="btn-primary">Join →</button>`;
-        card.querySelector('button').addEventListener('click', () => pickTeamThen(team =>
-            joinRoom(room.id, team.id)
-        ));
+            <div class="lobby-room-footer">
+                <div class="lobby-room-info">
+                    <span class="lobby-room-team">${room.home_username}</span>
+                    <span class="lobby-room-meta">${teamLabel}</span>
+                </div>
+                <button class="btn-primary">Join →</button>
+            </div>`;
+        card.querySelector('button').addEventListener('click', () => joinRoom(room.id));
         list.appendChild(card);
     });
 }
 
-document.getElementById('btn-create-room').addEventListener('click', () =>
-    pickTeamThen(team => createRoom(team.id))
-);
+document.getElementById('btn-create-room').addEventListener('click', () => createRoom());
 
 document.getElementById('btn-manage-teams').addEventListener('click', () => {
     hideLobby();
     showTeams();
 });
 
-async function createRoom(teamId) {
-    const data = await api('POST', '/api/lobby', { teamId });
+async function createRoom() {
+    const data = await api('POST', '/api/lobby', {});
     if (data.error) return alert(data.error);
     hideLobby();
     showRoom(data.roomId);
 }
 
-async function joinRoom(roomId, teamId) {
-    const data = await api('POST', `/api/lobby/${roomId}/join`, { teamId });
+async function joinRoom(roomId) {
+    const data = await api('POST', `/api/lobby/${roomId}/join`, {});
     if (data.error) return alert(data.error);
     hideLobby();
     showRoom(data.roomId);
@@ -174,9 +189,13 @@ function showTeamPicker(teams, onSelect) {
     teams.forEach(team => {
         const card = document.createElement('div');
         card.className = 'team-picker-card';
+        const logoUrl = raceLogoUrl(team.race);
         card.innerHTML = `
-            <span class="team-picker-name">${team.name}</span>
-            <span class="team-picker-meta">${team.race} · ${team.roster.length} players</span>`;
+            ${logoUrl ? `<img class="race-logo" src="${logoUrl}" alt="${team.race}">` : ''}
+            <div class="team-picker-info">
+                <span class="team-picker-name">${team.name}</span>
+                <span class="team-picker-meta">${team.race} · ${team.roster.length} players</span>
+            </div>`;
         card.addEventListener('click', () => {
             hideTeamPicker();
             onSelect(team);
@@ -208,10 +227,12 @@ function renderTeamsList(teams) {
         return;
     }
     teams.forEach(team => {
-        const def   = ROSTER_DEFS[team.race];
-        const card  = document.createElement('div');
+        const def    = ROSTER_DEFS[team.race];
+        const logoUrl = raceLogoUrl(team.race);
+        const card   = document.createElement('div');
         card.className = 'team-card';
         card.innerHTML = `
+            ${logoUrl ? `<img class="race-logo" src="${logoUrl}" alt="${team.race}">` : ''}
             <div class="team-card-info">
                 <span class="team-card-name">${team.name}</span>
                 <span class="team-card-meta">${team.race} · ${team.roster.length} players</span>
@@ -229,12 +250,13 @@ function renderTeamsList(teams) {
             if (seenPos.has(slot.pos)) return;
             seenPos.add(slot.pos);
             const posDef = def && def.positions.find(p => p.pos === slot.pos);
-            if (posDef && posDef.sprite && typeof drawSpritePreview === 'function') {
+            const cardSprite = slot.sprite || (posDef && posDef.sprite) || (posDef && posDef.sprites && posDef.sprites[0]);
+            if (cardSprite && typeof drawSpritePreview === 'function') {
                 const canvas = document.createElement('canvas');
                 canvas.className = 'sprite-preview';
                 canvas.width  = 32;
                 canvas.height = 32;
-                drawSpritePreview(canvas, posDef.sprite, def.colour);
+                drawSpritePreview(canvas, cardSprite, def.colour);
                 spritesEl.appendChild(canvas);
             }
         });
@@ -397,8 +419,9 @@ function renderRoster() {
                     <button type="button" class="btn-add-skill">+ skill</button>
                 </div>
             </div>`;
-        if (posDef && posDef.sprite && typeof drawSpritePreview === 'function') {
-            drawSpritePreview(li.querySelector('canvas'), posDef.sprite, def.colour);
+        const slotSprite = slot.sprite || (posDef && posDef.sprite);
+        if (slotSprite && typeof drawSpritePreview === 'function') {
+            drawSpritePreview(li.querySelector('canvas'), slotSprite, def.colour);
         }
         li.querySelector('input').addEventListener('input', e => { roster[i].name = e.target.value; });
         li.querySelector('.btn-remove').addEventListener('click', () => {
@@ -438,15 +461,23 @@ function renderPositions() {
             <canvas class="sprite-preview" width="32" height="32"></canvas>
             <span class="pos-name">${pos.pos}</span>
             <span class="pos-cost">${pos.cost.toLocaleString()} gp · ${used}/${pos.limit}</span>`;
-        if (pos.sprite && typeof drawSpritePreview === 'function') {
-            drawSpritePreview(card.querySelector('canvas'), pos.sprite, def.colour);
+        const previewSprite = pos.sprite || (pos.sprites && pos.sprites[0]);
+        if (previewSprite && typeof drawSpritePreview === 'function') {
+            drawSpritePreview(card.querySelector('canvas'), previewSprite, def.colour);
         }
         if (!disabled) {
             card.addEventListener('click', () => {
-                roster.push({ pos: pos.pos, name: randomPlayerName(selectedRace), skills: [...pos.skills] });
+                const sprite = pos.sprites
+                    ? pos.sprites[Math.floor(Math.random() * pos.sprites.length)]
+                    : undefined;
+                const slot = { pos: pos.pos, name: randomPlayerName(selectedRace, pos.pos), skills: [...pos.skills] };
+                if (sprite) slot.sprite = sprite;
+                roster.push(slot);
                 renderRoster();
                 renderPositions();
                 updateBudget();
+                const items = document.querySelectorAll('#roster-list .roster-item');
+                if (items.length) items[items.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             });
         }
         container.appendChild(card);
@@ -533,9 +564,13 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
 // ── Staging room ───────────────────────────────────────────────────
 let _roomEventSource = null;
 let _currentRoomId   = null;
+let _isHomeInRoom    = false;
+let _myTeamSet       = false;
 
 function showRoom(roomId) {
     _currentRoomId = roomId;
+    _isHomeInRoom  = false;
+    _myTeamSet     = false;
     document.getElementById('room-id-title').textContent = `Room ${roomId}`;
     document.getElementById('room-messages').innerHTML   = '';
     document.getElementById('room-chat-text').value      = '';
@@ -561,17 +596,50 @@ function connectRoomSSE(roomId) {
     es.addEventListener('joined', e => {
         const d = JSON.parse(e.data);
         document.getElementById('room-away-username').textContent = d.awayUsername;
-        document.getElementById('room-away-team').textContent     = `${d.awayTeamName} · ${d.awayRace}`;
+        document.getElementById('room-away-team').textContent     =
+            d.awayTeamName ? `${d.awayTeamName} · ${d.awayRace}` : '';
         document.getElementById('room-away-status').textContent   = 'Not ready';
-        document.getElementById('room-chat-text').disabled  = false;
-        document.getElementById('btn-room-send').disabled   = false;
-        document.getElementById('btn-room-ready').disabled  = false;
+        document.getElementById('room-chat-text').disabled = false;
+        document.getElementById('btn-room-send').disabled  = false;
+        refreshReadyButton();
         appendSystemMessage(`${d.awayUsername} joined the room.`);
     });
 
     es.addEventListener('message', e => {
         const d = JSON.parse(e.data);
         appendChatMessage(d.username, d.message);
+    });
+
+    es.addEventListener('left', e => {
+        const d = JSON.parse(e.data);
+        document.getElementById('room-away-username').textContent = '—';
+        document.getElementById('room-away-team').textContent     = 'Waiting for opponent…';
+        document.getElementById('room-away-logo').hidden          = true;
+        document.getElementById('btn-pick-team-away').hidden      = true;
+        document.getElementById('room-away-status').textContent   = '';
+        document.getElementById('room-chat-text').disabled        = true;
+        document.getElementById('btn-room-send').disabled         = true;
+        updateReadyState(false, false);
+        refreshReadyButton();
+        appendSystemMessage(`${d.username} left the room.`);
+    });
+
+    es.addEventListener('team', e => {
+        const d = JSON.parse(e.data);
+        const isMySide = (d.side === 'home') === _isHomeInRoom;
+        if (d.side === 'home') {
+            document.getElementById('room-home-team').textContent = `${d.teamName} · ${d.race}`;
+            document.getElementById('btn-pick-team-home').textContent = 'Change Team';
+            setRoomLogo('home', d.race);
+        } else {
+            document.getElementById('room-away-team').textContent = `${d.teamName} · ${d.race}`;
+            document.getElementById('btn-pick-team-away').textContent = 'Change Team';
+            setRoomLogo('away', d.race);
+        }
+        if (isMySide) {
+            _myTeamSet = true;
+            refreshReadyButton();
+        }
     });
 
     es.addEventListener('ready', e => {
@@ -584,6 +652,17 @@ function connectRoomSSE(roomId) {
         enterPlayingState(url);
     });
 
+    es.addEventListener('quit', e => {
+        const d = JSON.parse(e.data);
+        if (d.username === currentUser.username) return;
+        es.close();
+        _roomEventSource = null;
+        _currentRoomId   = null;
+        tearDownGame();
+        alert(`${d.username} has quit the game.`);
+        showLobby();
+    });
+
     es.addEventListener('closed', () => {
         es.close();
         _roomEventSource = null;
@@ -593,24 +672,75 @@ function connectRoomSSE(roomId) {
 }
 
 function renderRoomInit(state) {
+    _isHomeInRoom = state.homeUsername === currentUser.username;
+
     document.getElementById('room-home-username').textContent = state.homeUsername;
-    document.getElementById('room-home-team').textContent     = `${state.homeTeamName} · ${state.homeRace}`;
+    document.getElementById('room-home-team').textContent =
+        state.homeTeamName ? `${state.homeTeamName} · ${state.homeRace}` : '';
+    if (state.homeTeamName) setRoomLogo('home', state.homeRace);
 
     const hasAway = !!state.awayUsername;
     document.getElementById('room-away-username').textContent =
         hasAway ? state.awayUsername : '—';
     document.getElementById('room-away-team').textContent =
-        hasAway ? `${state.awayTeamName} · ${state.awayRace}` : 'Waiting for opponent…';
+        hasAway ? (state.awayTeamName ? `${state.awayTeamName} · ${state.awayRace}` : '') : 'Waiting for opponent…';
+    if (hasAway && state.awayTeamName) setRoomLogo('away', state.awayRace);
     document.getElementById('room-away-status').textContent =
         hasAway ? (state.awayReady ? 'Ready!' : 'Not ready') : '';
 
+    // Show "Pick Team" button for the current user's slot
+    const myTeamAlreadySet = _isHomeInRoom ? !!state.homeTeamName : !!state.awayTeamName;
+    _myTeamSet = myTeamAlreadySet;
+    const myBtnId  = _isHomeInRoom ? 'btn-pick-team-home' : 'btn-pick-team-away';
+    const myBtn    = document.getElementById(myBtnId);
+    myBtn.hidden   = false;
+    myBtn.textContent = myTeamAlreadySet ? 'Change Team' : 'Pick Team';
+
     document.getElementById('room-chat-text').disabled = !hasAway;
     document.getElementById('btn-room-send').disabled  = !hasAway;
-    document.getElementById('btn-room-ready').disabled = !hasAway;
+    refreshReadyButton();
 
     state.messages.forEach(m => appendChatMessage(m.username, m.message));
     updateReadyState(state.homeReady, state.awayReady);
 }
+
+function setRoomLogo(side, race) {
+    const img = document.getElementById(`room-${side}-logo`);
+    const url = raceLogoUrl(race);
+    if (url) { img.src = url; img.alt = race; img.hidden = false; }
+    else      { img.hidden = true; }
+}
+
+function refreshReadyButton() {
+    // Ready requires: opponent has joined AND current user has picked a team
+    const hasOpponent = !!document.getElementById('room-away-username').textContent &&
+                        document.getElementById('room-away-username').textContent !== '—';
+    document.getElementById('btn-room-ready').disabled = !hasOpponent || !_myTeamSet;
+}
+
+async function pickTeamForRoom() {
+    if (!_currentRoomId) return;
+    const data = await api('GET', '/api/teams');
+    if (!data.teams || data.teams.length === 0) {
+        alert('You need at least one team. Go to My Teams to create one.');
+        return;
+    }
+    if (data.teams.length === 1) {
+        await setRoomTeam(data.teams[0].id);
+        return;
+    }
+    showTeamPicker(data.teams, async team => {
+        await setRoomTeam(team.id);
+    });
+}
+
+async function setRoomTeam(teamId) {
+    const data = await api('POST', `/api/room/${_currentRoomId}/team`, { teamId });
+    if (data.error) alert(data.error);
+}
+
+document.getElementById('btn-pick-team-home').addEventListener('click', pickTeamForRoom);
+document.getElementById('btn-pick-team-away').addEventListener('click', pickTeamForRoom);
 
 function updateReadyState(homeReady, awayReady) {
     const homeStatus = document.getElementById('room-home-status');
@@ -620,15 +750,19 @@ function updateReadyState(homeReady, awayReady) {
     awayStatus.textContent = awayReady ? 'Ready!' : 'Not ready';
     awayStatus.className   = 'room-player-status' + (awayReady ? ' room-status-ready' : '');
 
+    const myReady    = _isHomeInRoom ? homeReady : awayReady;
+    const theirReady = _isHomeInRoom ? awayReady : homeReady;
+
     const hint = document.getElementById('room-ready-hint');
     const btn  = document.getElementById('btn-room-ready');
     if (homeReady && awayReady) {
         hint.textContent = 'Launching…';
-    } else if (homeReady) {
+        btn.classList.add('btn-ready-on');
+    } else if (myReady) {
         hint.textContent = 'Waiting for opponent to ready up…';
         btn.classList.add('btn-ready-on');
     } else {
-        hint.textContent = '';
+        hint.textContent = theirReady ? 'Opponent is ready!' : '';
         btn.classList.remove('btn-ready-on');
     }
 }
@@ -698,18 +832,23 @@ function enterPlayingState(url) {
     }
 }
 
-function exitGame() {
+function tearDownGame() {
     const iframe = document.getElementById('room-game-frame');
     iframe.src    = 'about:blank';
     iframe.hidden = true;
     document.getElementById('room-sidebar-bar').hidden = true;
     document.getElementById('room-chat').classList.remove('room-chat-collapsed');
     document.body.classList.remove('game-active');
-    // view-room is now: header (visible) + chat (visible, normal styling)
-    // room-players and room-actions remain hidden (game already launched)
 }
 
-document.getElementById('btn-exit-game').addEventListener('click', exitGame);
+document.getElementById('btn-exit-game').addEventListener('click', async () => {
+    if (!confirm('Quit the game? Your opponent will be notified.')) return;
+    if (_currentRoomId) await api('POST', `/api/room/${_currentRoomId}/quit`);
+    if (_roomEventSource) { _roomEventSource.close(); _roomEventSource = null; }
+    _currentRoomId = null;
+    tearDownGame();
+    showLobby();
+});
 
 // Chat toggle (mobile only — CSS hides it on desktop)
 document.getElementById('btn-chat-toggle').addEventListener('click', () => {

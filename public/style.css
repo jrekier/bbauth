@@ -286,6 +286,7 @@ button[type="submit"]:hover,
 
 @media (max-width: 600px) {
     .builder-columns { grid-template-columns: 1fr; }
+    .builder-right   { order: -1; }
 }
 
 /* ── Mobile ───────────────────────────────────────────────────── */
@@ -644,13 +645,20 @@ button[type="submit"]:hover,
 
 .team-picker-card {
     display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
     background: var(--bg);
     border: 1px solid var(--border);
     padding: 0.75rem 1rem;
     cursor: pointer;
     transition: border-color 0.1s;
+}
+
+.team-picker-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
 }
 
 .team-picker-card:hover { border-color: var(--text); }
@@ -688,12 +696,33 @@ button[type="submit"]:hover,
 
 .lobby-room-card {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 0.5rem;
     background: var(--bg-d);
     border: 1px solid var(--border);
     padding: 0.9rem 1.1rem;
     margin-bottom: 0.5rem;
+}
+
+.lobby-room-logos {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.lobby-room-logo-slot {
+    width: 28px;
+    height: 28px;
+    border: 1px dashed var(--border);
+    opacity: 0.35;
+    flex-shrink: 0;
+}
+
+.lobby-room-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
 }
 
 .lobby-room-info {
@@ -768,6 +797,20 @@ button[type="submit"]:hover,
     font-size: 1.4rem;
     letter-spacing: 0.05em;
     line-height: 1;
+}
+
+.room-player-team-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 1.2rem;
+}
+
+.race-logo {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .room-player-team {

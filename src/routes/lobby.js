@@ -77,15 +77,20 @@ router.get('/lobby', requireAuth, (_req, res) => {
 // ── POST /api/lobby — create a room ───────────────────────────────
 router.post('/lobby', requireAuth, (req, res) => {
     const { teamId } = req.body;
-    if (!teamId) return res.status(400).json({ error: 'teamId is required' });
 
-    const team = getTeamForUser(teamId, req.session.userId);
-    if (!team) return res.status(404).json({ error: 'Team not found' });
+    let resolvedTeamId = null, teamName = null, race = null;
+    if (teamId) {
+        const team = getTeamForUser(teamId, req.session.userId);
+        if (!team) return res.status(404).json({ error: 'Team not found' });
+        resolvedTeamId = team.id;
+        teamName       = team.name;
+        race           = team.race;
+    }
 
     const roomId = generateRoomId();
     db.prepare(
         'INSERT INTO pending_rooms (id, home_user_id, home_username, team_id, team_name, race) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(roomId, req.session.userId, req.session.username, team.id, team.name, team.race);
+    ).run(roomId, req.session.userId, req.session.username, resolvedTeamId, teamName, race);
 
     res.json({ roomId });
 });
@@ -100,19 +105,24 @@ router.post('/lobby/:id/join', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'Room is already full' });
 
     const { teamId } = req.body;
-    if (!teamId) return res.status(400).json({ error: 'teamId is required' });
 
-    const team = getTeamForUser(teamId, req.session.userId);
-    if (!team) return res.status(404).json({ error: 'Team not found' });
+    let resolvedTeamId = null, teamName = null, race = null;
+    if (teamId) {
+        const team = getTeamForUser(teamId, req.session.userId);
+        if (!team) return res.status(404).json({ error: 'Team not found' });
+        resolvedTeamId = team.id;
+        teamName       = team.name;
+        race           = team.race;
+    }
 
     db.prepare(
         'UPDATE pending_rooms SET away_user_id=?, away_username=?, away_team_id=?, away_team_name=?, away_race=? WHERE id=?'
-    ).run(req.session.userId, req.session.username, team.id, team.name, team.race, req.params.id);
+    ).run(req.session.userId, req.session.username, resolvedTeamId, teamName, race, req.params.id);
 
     broadcast(req.params.id, 'joined', {
         awayUsername: req.session.username,
-        awayTeamName: team.name,
-        awayRace:     team.race,
+        awayTeamName: teamName,
+        awayRace:     race,
     });
 
     res.json({ roomId: req.params.id });
@@ -122,13 +132,26 @@ router.post('/lobby/:id/join', requireAuth, (req, res) => {
 router.delete('/lobby/:id', requireAuth, (req, res) => {
     const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
     if (!room) return res.status(404).json({ error: 'Room not found' });
-    if (room.home_user_id !== req.session.userId && room.away_user_id !== req.session.userId)
-        return res.status(403).json({ error: 'Not in this room' });
 
+    const isHome = room.home_user_id === req.session.userId;
+    const isAway = room.away_user_id === req.session.userId;
+    if (!isHome && !isAway) return res.status(403).json({ error: 'Not in this room' });
+
+    // Away player leaving — remove them but keep the room open for home
+    if (isAway) {
+        db.prepare(`UPDATE pending_rooms
+            SET away_user_id=NULL, away_username=NULL,
+                away_team_id=NULL, away_team_name=NULL, away_race=NULL,
+                home_ready=0, away_ready=0
+            WHERE id=?`).run(req.params.id);
+        broadcast(req.params.id, 'left', { username: req.session.username });
+        return res.json({ ok: true });
+    }
+
+    // Home player leaving — close the room entirely
     broadcast(req.params.id, 'closed', { by: req.session.username });
     db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(req.params.id);
     db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(req.params.id);
-    // Defer cleanup of the SSE map so the "closed" event can drain
     setTimeout(() => roomClients.delete(req.params.id), 2000);
     res.json({ ok: true });
 });
@@ -203,6 +226,55 @@ router.post('/room/:id/message', requireAuth, (req, res) => {
     res.json({ ok: true });
 });
 
+// ── POST /api/room/:id/quit — quit an in-progress game ────────────
+router.post('/room/:id/quit', requireAuth, (req, res) => {
+    const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
+    const isHome = room.home_user_id === req.session.userId;
+    const isAway = room.away_user_id === req.session.userId;
+    if (!isHome && !isAway) return res.status(403).json({ error: 'Not in this room' });
+
+    broadcast(req.params.id, 'quit', { username: req.session.username });
+    db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(req.params.id);
+    setTimeout(() => roomClients.delete(req.params.id), 2000);
+
+    res.json({ ok: true });
+});
+
+// ── POST /api/room/:id/team — pick / change team ──────────────────
+router.post('/room/:id/team', requireAuth, (req, res) => {
+    const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
+    const isHome = room.home_user_id === req.session.userId;
+    const isAway = room.away_user_id === req.session.userId;
+    if (!isHome && !isAway) return res.status(403).json({ error: 'Not in this room' });
+
+    const { teamId } = req.body;
+    if (!teamId) return res.status(400).json({ error: 'teamId is required' });
+
+    const team = getTeamForUser(teamId, req.session.userId);
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+
+    if (isHome) {
+        db.prepare('UPDATE pending_rooms SET team_id=?, team_name=?, race=? WHERE id=?')
+            .run(team.id, team.name, team.race, req.params.id);
+    } else {
+        db.prepare('UPDATE pending_rooms SET away_team_id=?, away_team_name=?, away_race=? WHERE id=?')
+            .run(team.id, team.name, team.race, req.params.id);
+    }
+
+    broadcast(req.params.id, 'team', {
+        side:     isHome ? 'home' : 'away',
+        teamName: team.name,
+        race:     team.race,
+    });
+
+    res.json({ ok: true });
+});
+
 // ── POST /api/room/:id/ready — toggle ready state ─────────────────
 router.post('/room/:id/ready', requireAuth, (req, res) => {
     const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
@@ -212,6 +284,9 @@ router.post('/room/:id/ready', requireAuth, (req, res) => {
     const isHome = room.home_user_id === req.session.userId;
     const isAway = room.away_user_id === req.session.userId;
     if (!isHome && !isAway) return res.status(403).json({ error: 'Not in this room' });
+
+    if (isHome && !room.team_id)      return res.status(400).json({ error: 'Pick a team first' });
+    if (isAway && !room.away_team_id) return res.status(400).json({ error: 'Pick a team first' });
 
     if (isHome) db.prepare('UPDATE pending_rooms SET home_ready = ? WHERE id = ?').run(room.home_ready ? 0 : 1, req.params.id);
     else        db.prepare('UPDATE pending_rooms SET away_ready = ? WHERE id = ?').run(room.away_ready ? 0 : 1, req.params.id);

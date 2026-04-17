@@ -59,10 +59,40 @@
         const [cr, cg, cb] = colour;
 
         loadSheet(sheet, (img) => {
+            // Layer 1: base at natural size
+            const baseOff  = new OffscreenCanvas(base.w, base.h);
+            const baseCtx  = baseOff.getContext('2d');
+            baseCtx.imageSmoothingEnabled = false;
+            baseCtx.drawImage(img, base.x, base.y, base.w, base.h, 0, 0, base.w, base.h);
+
+            // Layer 2: armour at natural size, tinted
+            const armOff  = new OffscreenCanvas(armour.w, armour.h);
+            const armCtx  = armOff.getContext('2d');
+            armCtx.imageSmoothingEnabled = false;
+            armCtx.drawImage(img, armour.x, armour.y, armour.w, armour.h, 0, 0, armour.w, armour.h);
+
+            const imgData = armCtx.getImageData(0, 0, armour.w, armour.h);
+            const d = imgData.data;
+            const [th, ts] = rgbToHsl(cr, cg, cb);
+            const trimLeft = spriteDef.armourTrimLeft || 0;
+            for (let i = 0; i < d.length; i += 4) {
+                if ((i / 4) % armour.w < trimLeft) { d[i + 3] = 0; continue; }
+                if (d[i + 3] < 10) continue;
+                const [,, l] = rgbToHsl(d[i], d[i + 1], d[i + 2]);
+                const [nr, ng, nb] = hslToRgb(th, ts, l);
+                d[i] = nr; d[i + 1] = ng; d[i + 2] = nb;
+            }
+            armCtx.putImageData(imgData, 0, 0);
+
+            // Composite both layers at natural size, then scale the result once
             const W = Math.max(base.w, armour.w);
             const H = Math.max(base.h, armour.h);
+            const composed = new OffscreenCanvas(W, H);
+            const cCtx     = composed.getContext('2d');
+            cCtx.imageSmoothingEnabled = false;
+            cCtx.drawImage(baseOff, 0, 0);
+            cCtx.drawImage(armOff,  0, 0);
 
-            // Scale to fill the canvas while keeping pixels crisp
             const scale = Math.min(canvas.width / W, canvas.height / H);
             const dw = Math.round(W * scale);
             const dh = Math.round(H * scale);
@@ -72,28 +102,7 @@
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = false;
-
-            // Base layer — drawn as-is
-            ctx.drawImage(img, base.x, base.y, base.w, base.h, dx, dy, dw, dh);
-
-            // Armour layer — composite onto an offscreen canvas for tinting
-            const off    = new OffscreenCanvas(armour.w, armour.h);
-            const offCtx = off.getContext('2d');
-            offCtx.imageSmoothingEnabled = false;
-            offCtx.drawImage(img, armour.x, armour.y, armour.w, armour.h, 0, 0, armour.w, armour.h);
-
-            const imgData = offCtx.getImageData(0, 0, armour.w, armour.h);
-            const d = imgData.data;
-            const [th, ts] = rgbToHsl(cr, cg, cb);
-            for (let i = 0; i < d.length; i += 4) {
-                if (d[i + 3] < 10) continue;
-                const [,, l] = rgbToHsl(d[i], d[i + 1], d[i + 2]);
-                const [nr, ng, nb] = hslToRgb(th, ts, l);
-                d[i] = nr; d[i + 1] = ng; d[i + 2] = nb;
-            }
-            offCtx.putImageData(imgData, 0, 0);
-
-            ctx.drawImage(off, 0, 0, armour.w, armour.h, dx, dy, dw, dh);
+            ctx.drawImage(composed, 0, 0, W, H, dx, dy, dw, dh);
         });
     }
 

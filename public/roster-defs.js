@@ -28,10 +28,13 @@ const SKILLS = [
     'Sprint', 'Sure Feet', 'Stunty',
     'Two Heads', 'Extra Arms', 'Big Hand',
     'Loner', 'Wild Animal', 'Bone-head', 'Really Stupid', 'Take Root',
+    'Right Stuff', 'Break Tackle', 'Taunt', 'Unsteady',
+    'Always Hungry', 'Projectile Vomit', 'Throw Team-mate',
 ];
 
 const ROSTER_DEFS = {
     humans: {
+        logo:   'assets/logos/Human_BB2025.svg',
         colour: [200, 30, 30],
         budget: 1000000,
         min: 7,
@@ -69,38 +72,67 @@ const ROSTER_DEFS = {
     },
 
     orcs: {
+        logo:   'assets/logos/Orc_BB2025.svg',
         colour: [30, 80, 180],
         budget: 1000000,
         min: 7,
         max: 11,
         positions: [
             {
-                pos: 'Lineman', ma: 5, st: 3, ag: 3, pa: 4, av: 9, skills: [],
-                cost: 50000, limit: 12,
-                sprite: { sheet: 'assets/sprites/orc.gif',
-                    base:   { x:  0, y:  0, w: 26, h: 26 },
-                    armour: { x: 32, y:  0, w: 26, h: 26 } },
+                pos: 'Goblin Lineman', ma: 6, st: 2, ag: 3, pa: 3, av: 8, skills: ['Dodge', 'Right Stuff', 'Stunty'],
+                cost: 40000, limit: 4,
+                sprites: [
+                    { sheet: 'assets/sprites/goblin.gif', base: { x:  0, y:   0, w: 19, h: 24 }, armour: { x: 39, y:   0, w: 19, h: 22 } },
+                    { sheet: 'assets/sprites/goblin.gif', base: { x:  0, y:  24, w: 20, h: 26 }, armour: { x: 38, y:  24, w: 20, h: 23 } },
+                    { sheet: 'assets/sprites/goblin.gif', base: { x:  1, y:  50, w: 18, h: 27 }, armour: { x: 38, y:  50, w: 21, h: 27 } },
+                    { sheet: 'assets/sprites/goblin.gif', base: { x:  0, y:  77, w: 21, h: 25 }, armour: { x: 39, y:  77, w: 18, h: 25 } },
+                    { sheet: 'assets/sprites/goblin.gif', base: { x:  0, y: 102, w: 18, h: 22 }, armour: { x: 38, y: 102, w: 18, h: 22 } },
+                    { sheet: 'assets/sprites/goblin.gif', base: { x:  0, y: 149, w: 19, h: 27 }, armour: { x: 38, y: 149, w: 19, h: 24 } },
+                ],
             },
             {
-                pos: 'Blitzer', ma: 6, st: 3, ag: 3, pa: 4, av: 9, skills: ['Block'],
-                cost: 80000, limit: 4,
-                sprite: { sheet: 'assets/sprites/orc.gif',
-                    base:   { x:  0, y: 83, w: 27, h: 25 },
-                    armour: { x: 32, y: 82, w: 27, h: 26 } },
+                pos: 'Orc Lineman', ma: 5, st: 3, ag: 3, pa: 4, av: 10, skills: [],
+                cost: 50000, limit: 16,
+                sprites: [
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y:  0, w: 26, h: 26 }, armour: { x: 32, y:  0, w: 26, h: 26 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 27, w: 26, h: 27 }, armour: { x: 32, y: 27, w: 25, h: 27 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 55, w: 26, h: 26 }, armour: { x: 32, y: 55, w: 26, h: 26 } },
+                ],
             },
             {
-                pos: 'Thrower', ma: 5, st: 3, ag: 3, pa: 3, av: 9, skills: ['Pass', 'Sure Hands'],
-                cost: 70000, limit: 2,
-                sprite: { sheet: 'assets/sprites/orc.gif',
-                    base:   { x:  0, y:  0, w: 26, h: 26 },
-                    armour: { x: 32, y:  0, w: 26, h: 26 } },
+                pos: 'Orc Thrower', ma: 6, st: 3, ag: 3, pa: 3, av: 9, skills: ['Pass', 'Sure Hands'],
+                cost: 75000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 319, w: 24, h: 26 }, armour: { x: 32, y: 319, w: 23, h: 26 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 346, w: 24, h: 27 }, armour: { x: 32, y: 346, w: 23, h: 27 } },
+                ],
             },
             {
-                pos: 'Black Orc', ma: 4, st: 4, ag: 2, pa: 6, av: 9, skills: [],
-                cost: 90000, limit: 4,
-                sprite: { sheet: 'assets/sprites/orc.gif',
-                    base:   { x:  0, y: 191, w: 30, h: 31 },
-                    armour: { x: 32, y: 191, w: 29, h: 31 } },
+                pos: 'Orc Blitzer', ma: 6, st: 3, ag: 3, pa: 4, av: 10, skills: ['Block', 'Break Tackle'],
+                cost: 85000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y:  82, w: 27, h: 26 }, armour: { x: 32, y:  82, w: 27, h: 26 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 109, w: 27, h: 27 }, armour: { x: 32, y: 109, w: 27, h: 27 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 137, w: 26, h: 26 }, armour: { x: 32, y: 137, w: 27, h: 26 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 164, w: 27, h: 26 }, armour: { x: 32, y: 164, w: 27, h: 26 } },
+                ],
+            },
+            {
+                pos: 'Big Un Blocker', ma: 5, st: 4, ag: 4, pa: 6, av: 10, skills: ['Mighty Blow', 'Taunt', 'Thick Skull', 'Unsteady'],
+                cost: 95000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 374, w: 30, h: 31 }, armour: { x: 32, y: 374, w: 31, h: 31 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 405, w: 31, h: 32 }, armour: { x: 32, y: 405, w: 31, h: 32 } },
+                    { sheet: 'assets/sprites/orc.gif', base: { x: 0, y: 437, w: 31, h: 32 }, armour: { x: 32, y: 437, w: 31, h: 32 } },
+                ],
+            },
+            {
+                pos: 'Troll', ma: 4, st: 5, ag: 5, pa: 5, av: 10, skills: ['Always Hungry', 'Loner', 'Mighty Blow', 'Projectile Vomit', 'Really Stupid', 'Regeneration', 'Throw Team-mate'],
+                cost: 115000, limit: 1,
+                sprite: { sheet: 'assets/sprites/goblin.gif',
+                    base:   { x:  0, y: 396, w: 40, h: 38 },
+                    armour: { x: 38, y: 396, w: 40, h: 38 },
+                    armourTrimLeft: 2 },
             },
         ],
     },
@@ -123,7 +155,7 @@ function expandTeam(dbTeam) {
             pa:     posDef.pa,
             av:     posDef.av,
             skills: Array.isArray(slot.skills) ? [...slot.skills] : [...posDef.skills],
-            sprite: posDef.sprite,
+            sprite: slot.sprite || posDef.sprite,
         };
     }).filter(Boolean);
     // homeColour / awayColour: stored on the team, or fall back to race default
@@ -155,10 +187,15 @@ const PLAYER_NAMES = {
         'Ragnok', 'Skrag', 'Torgoch', 'Ugluk', 'Vorg', 'Waaghnak', 'Xurg', 'Yagrak',
         'Zograt', 'Burrak', 'Dakkag', 'Gutrot', 'Hrakka', 'Kilgor',
     ],
+    goblins: [
+        'Snikt', 'Grix', 'Nubz', 'Zapp', 'Wik', 'Plugg', 'Skwee', 'Nark',
+        'Fizzle', 'Grimp', 'Snik', 'Twitchy', 'Wobble', 'Pox', 'Zeeble',
+    ],
 };
 
-function randomPlayerName(race) {
-    const pool = PLAYER_NAMES[race] || [];
+function randomPlayerName(race, pos) {
+    const posKey = pos && pos.toLowerCase().split(' ')[0];  // 'goblin lineman' → 'goblin'
+    const pool = PLAYER_NAMES[posKey] || PLAYER_NAMES[race] || [];
     if (pool.length === 0) return '';
     return pool[Math.floor(Math.random() * pool.length)];
 }

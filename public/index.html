@@ -159,13 +159,21 @@
         <div class="room-players" id="room-players">
             <div class="room-player" id="room-player-home">
                 <div class="room-player-name" id="room-home-username">—</div>
-                <div class="room-player-team" id="room-home-team"></div>
+                <div class="room-player-team-row">
+                    <img class="race-logo" id="room-home-logo" hidden alt="">
+                    <div class="room-player-team" id="room-home-team"></div>
+                </div>
+                <button class="btn-ghost room-pick-team-btn" id="btn-pick-team-home" hidden>Pick Team</button>
                 <div class="room-player-status" id="room-home-status">Not ready</div>
             </div>
             <div class="room-vs">VS</div>
             <div class="room-player" id="room-player-away">
                 <div class="room-player-name" id="room-away-username">—</div>
-                <div class="room-player-team" id="room-away-team">Waiting for opponent…</div>
+                <div class="room-player-team-row">
+                    <img class="race-logo" id="room-away-logo" hidden alt="">
+                    <div class="room-player-team" id="room-away-team">Waiting for opponent…</div>
+                </div>
+                <button class="btn-ghost room-pick-team-btn" id="btn-pick-team-away" hidden>Pick Team</button>
                 <div class="room-player-status" id="room-away-status"></div>
             </div>
         </div>
@@ -175,7 +183,7 @@
 
         <!-- Controls bar (exit + mobile chat toggle) — shown only during game -->
         <div class="room-sidebar-bar" id="room-sidebar-bar" hidden>
-            <button class="btn-ghost" id="btn-exit-game">← Room</button>
+            <button class="btn-ghost" id="btn-exit-game">Quit Game</button>
             <button class="btn-ghost" id="btn-chat-toggle">Chat ▲</button>
         </div>
 
