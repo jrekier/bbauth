@@ -38,6 +38,10 @@ h1 {
     font-size: 3.5rem;
     letter-spacing: 0.05em;
     line-height: 1;
+    background: var(--red);
+    color: var(--yellow);
+    padding: 0.1em 0.35em;
+    display: inline-block;
 }
 
 h2 {
@@ -45,6 +49,10 @@ h2 {
     font-size: 1.8rem;
     letter-spacing: 0.05em;
     margin-bottom: 1rem;
+    background: var(--blue);
+    color: var(--yellow);
+    padding: 0.1em 0.35em;
+    display: inline-block;
 }
 
 h3 {
@@ -96,8 +104,9 @@ h3 {
 }
 
 .tab.active {
-    color: var(--blood);
-    border-bottom-color: var(--blood);
+    background: var(--red);
+    color: var(--yellow);
+    border-bottom-color: var(--red);
 }
 
 /* ── Forms ────────────────────────────────────────────────────── */
@@ -336,7 +345,7 @@ button[type="submit"]:hover,
     }
 
     .team-card-sprites {
-        order: -1;
+        width: 100%;
     }
 
     .team-card-actions {
@@ -434,7 +443,7 @@ button[type="submit"]:hover,
 
 .btn-add-skill {
     background: none;
-    border: 1px dashed var(--border);
+    border: 1px solid var(--border);
     color: var(--text-dim);
     font-family: inherit;
     font-size: 0.65rem;
@@ -713,7 +722,7 @@ button[type="submit"]:hover,
 .lobby-room-logo-slot {
     width: 28px;
     height: 28px;
-    border: 1px dashed var(--border);
+    border: 1px solid var(--border);
     opacity: 0.35;
     flex-shrink: 0;
 }

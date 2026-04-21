@@ -12,12 +12,14 @@ db.exec(`
     );
 
     CREATE TABLE IF NOT EXISTS teams (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name       TEXT    NOT NULL,
-        race       TEXT    NOT NULL,
-        roster     TEXT    NOT NULL DEFAULT '[]',
-        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name        TEXT    NOT NULL,
+        race        TEXT    NOT NULL,
+        roster      TEXT    NOT NULL DEFAULT '[]',
+        home_colour TEXT,
+        away_colour TEXT,
+        created_at  INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
     CREATE TABLE IF NOT EXISTS pending_rooms (
@@ -27,6 +29,13 @@ db.exec(`
         team_id        INTEGER REFERENCES teams(id) ON DELETE SET NULL,
         team_name      TEXT,
         race           TEXT,
+        home_ready     INTEGER NOT NULL DEFAULT 0,
+        away_user_id   INTEGER,
+        away_username  TEXT,
+        away_team_id   INTEGER,
+        away_team_name TEXT,
+        away_race      TEXT,
+        away_ready     INTEGER NOT NULL DEFAULT 0,
         created_at     INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -38,21 +47,5 @@ db.exec(`
         created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 `);
-
-// Migrate existing pending_rooms tables that predate the team_id column
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN team_id INTEGER'); } catch {}
-
-// Migrate existing teams tables that predate per-team colours
-try { db.exec("ALTER TABLE teams ADD COLUMN home_colour TEXT"); } catch {}
-try { db.exec("ALTER TABLE teams ADD COLUMN away_colour TEXT"); } catch {}
-
-// Migrate pending_rooms to support staging (away user + ready flags)
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN away_user_id   INTEGER'); } catch {}
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN away_username  TEXT'); } catch {}
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN away_team_id   INTEGER'); } catch {}
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN away_team_name TEXT'); } catch {}
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN away_race      TEXT'); } catch {}
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN home_ready     INTEGER NOT NULL DEFAULT 0'); } catch {}
-try { db.exec('ALTER TABLE pending_rooms ADD COLUMN away_ready     INTEGER NOT NULL DEFAULT 0'); } catch {}
 
 module.exports = db;

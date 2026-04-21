@@ -872,14 +872,6 @@ document.getElementById('btn-room-leave').addEventListener('click', async () => 
     showLobby();
 });
 
-// ── Banner ─────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof drawBanner === 'function') {
-        const canvas = document.getElementById('main-banner');
-        document.fonts.ready.then(() => drawBanner(canvas, { title: 'Blood Bowl' }));
-        window.addEventListener('resize', () => drawBanner(canvas, { title: 'Blood Bowl' }));
-    }
-});
 
 // ── Go ─────────────────────────────────────────────────────────────
 boot();
