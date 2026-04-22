@@ -776,6 +776,15 @@ function appendChatMessage(username, text) {
         + `<span class="room-msg-text">${escHtml(text)}</span>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
+
+    // Shimmer the toggle button when chat is collapsed and message is from opponent.
+    if (!isSelf) {
+        const chat = document.getElementById('room-chat');
+        const btn  = document.getElementById('btn-chat-toggle');
+        if (btn && chat && chat.classList.contains('room-chat-collapsed')) {
+            btn.classList.add('has-unread');
+        }
+    }
 }
 
 function appendSystemMessage(text) {
@@ -856,6 +865,7 @@ document.getElementById('btn-chat-toggle').addEventListener('click', () => {
     const btn  = document.getElementById('btn-chat-toggle');
     const collapsed = chat.classList.toggle('room-chat-collapsed');
     btn.textContent = collapsed ? 'Chat ▲' : 'Chat ▼';
+    btn.classList.remove('has-unread');
     if (!collapsed) {
         document.getElementById('room-messages').scrollTop = document.getElementById('room-messages').scrollHeight;
     }

@@ -997,6 +997,15 @@ body.game-active #room-sidebar-bar .btn-ghost {
 /* Chat toggle visibility controlled by JS in enterPlayingState() */
 body.game-active #btn-chat-toggle { display: none; }
 
+@keyframes chat-shimmer {
+    0%   { box-shadow: 0 0 0 0 var(--gold); color: var(--gold); }
+    40%  { box-shadow: 0 0 8px 3px var(--gold); color: #fff; }
+    100% { box-shadow: 0 0 0 0 var(--gold); color: var(--gold); }
+}
+#btn-chat-toggle.has-unread {
+    animation: chat-shimmer 1.4s ease infinite;
+}
+
 /* Chat panel: bottom-left cell, scrollable */
 body.game-active .room-chat {
     grid-column: 1;
