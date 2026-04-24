@@ -30,6 +30,7 @@ const SKILLS = [
     'Loner', 'Wild Animal', 'Bone-head', 'Really Stupid', 'Take Root',
     'Right Stuff', 'Break Tackle', 'Taunt', 'Unsteady',
     'Always Hungry', 'Projectile Vomit', 'Throw Team-mate',
+    'Animal Savagery', 'Prehensile Tail',
 ];
 
 const ROSTER_DEFS = {
@@ -157,6 +158,56 @@ const ROSTER_DEFS = {
             },
         ],
     },
+
+    skaven: {
+        logo:   'assets/logos/Skaven_BB2025.svg',
+        colour: [180, 140, 60],
+        budget: 1000000,
+        min: 7,
+        max: 11,
+        positions: [
+            {
+                pos: 'Skaven Clanrat', ma: 7, st: 3, ag: 3, pa: 4, av: 8, skills: [],
+                cost: 50000, limit: 16,
+                sprites: [
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y:  0, w: 23, h: 25 }, armour: { x: 34, y:  0, w: 24, h: 25 } },
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 26, w: 23, h: 23 }, armour: { x: 34, y: 26, w: 22, h: 23 } },
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 50, w: 23, h: 23 }, armour: { x: 34, y: 50, w: 21, h: 23 } },
+                ],
+            },
+            {
+                pos: 'Skaven Thrower', ma: 7, st: 3, ag: 3, pa: 2, av: 8, skills: ['Pass', 'Sure Hands'],
+                cost: 80000, limit: 2,
+                sprite: { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 224, w: 23, h: 26 }, armour: { x: 34, y: 224, w: 23, h: 26 } },
+            },
+            {
+                pos: 'Gutter Runner', ma: 9, st: 2, ag: 2, pa: 4, av: 8, skills: ['Dodge', 'Stab'],
+                cost: 85000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 124, w: 25, h: 24 }, armour: { x: 34, y: 124, w: 24, h: 24 } },
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 149, w: 25, h: 24 }, armour: { x: 34, y: 149, w: 24, h: 24 } },
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 174, w: 25, h: 24 }, armour: { x: 34, y: 174, w: 24, h: 24 } },
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y: 199, w: 25, h: 24 }, armour: { x: 34, y: 199, w: 24, h: 24 } },
+                ],
+            },
+            {
+                pos: 'Skaven Blitzer', ma: 8, st: 3, ag: 3, pa: 4, av: 9, skills: ['Block', 'Strip Ball'],
+                cost: 90000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y:  74, w: 23, h: 23 }, armour: { x: 34, y:  74, w: 23, h: 23 } },
+                    { sheet: 'assets/sprites/skaven.gif', base: { x:  0, y:  98, w: 23, h: 25 }, armour: { x: 34, y:  98, w: 23, h: 25 } },
+                ],
+            },
+            {
+                pos: 'Rat Ogre', ma: 6, st: 5, ag: 4, pa: 6, av: 9, skills: ['Animal Savagery', 'Frenzy', 'Loner', 'Mighty Blow', 'Prehensile Tail'],
+                cost: 150000, limit: 1,
+                sprite: { sheet: 'assets/sprites/skaven.gif', 
+                    base: { x:  0, y: 251, w: 38, h: 38 }, 
+                    armour: { x: 34, y: 251, w: 24, h: 38 }, 
+                    armourTrimLeft: 4 },
+            },
+        ],
+    },
 };
 
 // Convert a stored team {name, race, roster:[{pos,name}]} to a fully expanded
@@ -211,6 +262,13 @@ const PLAYER_NAMES = {
     goblins: [
         'Snikt', 'Grix', 'Nubz', 'Zapp', 'Wik', 'Plugg', 'Skwee', 'Nark',
         'Fizzle', 'Grimp', 'Snik', 'Twitchy', 'Wobble', 'Pox', 'Zeeble',
+    ],
+    skaven: [
+        'Skritch', 'Queek', 'Snikch', 'Kratch', 'Feskit', 'Vrisk', 'Tretch',
+        'Rikkit', 'Gnawfang', 'Skitter', 'Scritclaw', 'Vrrsk', 'Grrit', 'Krichk',
+        'Flink', 'Rattachak', 'Skree', 'Chittr', 'Gnaw', 'Scratch',
+        'Skrolk', 'Nurglitch', 'Klawmunkast', 'Snarl', 'Squeak', 'Nibble',
+        'Reekit', 'Hackfang', 'Nikkitt', 'Scurry',
     ],
 };
 
