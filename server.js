@@ -19,7 +19,7 @@ app.use(express.json());
 // express-session generates a session ID, stores it in a signed cookie,
 // and provides req.session for reading/writing session data.
 app.use(session({
-    secret:            process.env.SESSION_SECRET || 'dev-only-secret',
+    secret:            process.env.SESSION_SECRET,
     resave:            false,  // don't save session if nothing changed
     saveUninitialized: false,  // don't create session until something is stored
     cookie: {

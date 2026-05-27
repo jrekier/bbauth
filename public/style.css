@@ -5,6 +5,9 @@
     --gap:      1.5rem;
 }
 
+/* author `form { display: flex }` overrides UA [hidden]; restore it */
+[hidden] { display: none !important; }
+
 /* ── Base ─────────────────────────────────────────────────────── */
 body {
     min-height: 100vh;
