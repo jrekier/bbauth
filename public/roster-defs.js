@@ -27,10 +27,13 @@ const SKILLS = [
     'Regeneration', 'Thick Skull', 'Stand Firm',
     'Sprint', 'Sure Feet', 'Stunty',
     'Two Heads', 'Extra Arms', 'Big Hand',
-    'Loner', 'Wild Animal', 'Bone-head', 'Really Stupid', 'Take Root',
+    'Loner', 'Wild Animal', 'Bone Head', 'Really Stupid', 'Take Root',
     'Right Stuff', 'Break Tackle', 'Taunt', 'Unsteady',
-    'Always Hungry', 'Projectile Vomit', 'Throw Team-mate',
+    'Always Hungry', 'Projectile Vomit', 'Throw Team-Mate',
     'Animal Savagery', 'Prehensile Tail',
+    'Dauntless', 'Dirty Player', 'No Ball', 'Secret Weapon',
+    'Fend', 'Give and Go', 'Pro',
+    'Defensive', 'Diving Tackle', 'Hatred (Troll)',
 ];
 
 const ROSTER_DEFS = {
@@ -83,7 +86,7 @@ const ROSTER_DEFS = {
                     armour: { x: 26, y: 190, w: 24, h: 26 } },
             },
             {
-                pos: 'Ogre', ma: 5, st: 5, ag: 4, pa: 5, av: 10, skills: ['Bone-head', 'Loner', 'Mighty Blow', 'Thick Skull', 'Throw Team-mate'],
+                pos: 'Ogre', ma: 5, st: 5, ag: 4, pa: 5, av: 10, skills: ['Bone Head', 'Loner', 'Mighty Blow', 'Thick Skull', 'Throw Team-Mate'],
                 cost: 140000, limit: 1,
                 sprite: { sheet: 'assets/sprites/ogre.gif',
                     base:   { x:  0, y: 0, w: 38, h: 38 },
@@ -149,7 +152,7 @@ const ROSTER_DEFS = {
                 ],
             },
             {
-                pos: 'Troll', ma: 4, st: 5, ag: 5, pa: 5, av: 10, skills: ['Always Hungry', 'Loner', 'Mighty Blow', 'Projectile Vomit', 'Really Stupid', 'Regeneration', 'Throw Team-mate'],
+                pos: 'Troll', ma: 4, st: 5, ag: 5, pa: 5, av: 10, skills: ['Always Hungry', 'Loner', 'Mighty Blow', 'Projectile Vomit', 'Really Stupid', 'Regeneration', 'Throw Team-Mate'],
                 cost: 115000, limit: 1,
                 sprite: { sheet: 'assets/sprites/goblin.gif',
                     base:   { x:  0, y: 396, w: 40, h: 38 },
@@ -205,6 +208,117 @@ const ROSTER_DEFS = {
                     base: { x:  0, y: 251, w: 38, h: 38 }, 
                     armour: { x: 34, y: 251, w: 24, h: 38 }, 
                     armourTrimLeft: 4 },
+            },
+        ],
+    },
+
+    dwarfs: {
+        logo:   'assets/logos/Dwarf_BB2025.svg',
+        colour: [60, 90, 140],
+        budget: 1000000,
+        min: 7,
+        max: 11,
+        positions: [
+            {
+                pos: 'Dwarf Lineman', ma: 4, st: 3, ag: 4, pa: 5, av: 10, skills: ['Block', 'Defensive', 'Thick Skull'],
+                cost: 70000, limit: 16,
+                sprites: [
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y:   0, w: 22, h: 25 }, armour: { x: 24, y:   0, w: 21, h: 25 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y:  26, w: 22, h: 25 }, armour: { x: 24, y:  26, w: 21, h: 25 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y:  52, w: 22, h: 25 }, armour: { x: 24, y:  52, w: 21, h: 25 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y:  78, w: 22, h: 25 }, armour: { x: 24, y:  78, w: 21, h: 25 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 105, w: 22, h: 25 }, armour: { x: 24, y: 104, w: 21, h: 25 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 131, w: 22, h: 26 }, armour: { x: 24, y: 131, w: 21, h: 26 } },
+                ],
+            },
+            {
+                pos: 'Dwarf Runner', ma: 6, st: 3, ag: 3, pa: 4, av: 9, skills: ['Sprint', 'Sure Hands', 'Thick Skull'],
+                cost: 80000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 158, w: 22, h: 24 }, armour: { x: 24, y: 158, w: 19, h: 24 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 183, w: 22, h: 25 }, armour: { x: 24, y: 183, w: 19, h: 25 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 208, w: 22, h: 24 }, armour: { x: 24, y: 208, w: 19, h: 24 } },
+                ],
+            },
+            {
+                pos: 'Dwarf Blitzer', ma: 5, st: 3, ag: 4, pa: 4, av: 10, skills: ['Block', 'Diving Tackle', 'Tackle', 'Thick Skull'],
+                cost: 100000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 233, w: 22, h: 26 }, armour: { x: 24, y: 233, w: 21, h: 26 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 0, y: 260, w: 22, h: 26 }, armour: { x: 24, y: 260, w: 21, h: 26 } },
+                ],
+            },
+            {
+                pos: 'Troll Slayer', ma: 5, st: 3, ag: 4, pa: 5, av: 9, skills: ['Block', 'Dauntless', 'Frenzy', 'Hatred (Troll)', 'Thick Skull'],
+                cost: 95000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 1, y: 287, w: 21, h: 27 }, armour: { x: 25, y: 287, w: 18, h: 27 } },
+                    { sheet: 'assets/sprites/dwarf.gif', base: { x: 1, y: 315, w: 21, h: 26 }, armour: { x: 25, y: 315, w: 18, h: 26 } },
+                ],
+            },
+            {
+                pos: 'Deathroller', ma: 5, st: 7, ag: 5, pa: '-', av: 11, skills: ['Break Tackle', 'Dirty Player', 'Juggernaut', 'Loner', 'Mighty Blow', 'No Ball', 'Secret Weapon', 'Stand Firm'],
+                cost: 170000, limit: 1,
+                sprite: { sheet: 'assets/sprites/dwarf.gif',
+                    base:   { x: 0, y: 342, w: 33, h: 38 },
+                    armour: { x: 24, y: 342, w: 23, h: 24 },
+                    armourTrimLeft: 4 },
+            },
+        ],
+    },
+
+    imperialnobility: {
+        logo:   'assets/logos/ImperialNobility_BB2025.svg',
+        colour: [175, 35, 45],
+        budget: 1000000,
+        min: 7,
+        max: 11,
+        positions: [
+            {
+                pos: 'Imperial Retainer', ma: 6, st: 3, ag: 3, pa: 4, av: 8, skills: ['Fend'],
+                cost: 45000, limit: 16,
+                sprites: [
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y:   0, w: 21, h: 33 }, armour: { x: 40, y:   0, w: 21, h: 31 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y:  34, w: 21, h: 32 }, armour: { x: 40, y:  33, w: 21, h: 32 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y:  67, w: 21, h: 32 }, armour: { x: 40, y:  66, w: 21, h: 32 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y:  99, w: 21, h: 33 }, armour: { x: 40, y:  99, w: 21, h: 31 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 132, w: 21, h: 33 }, armour: { x: 40, y: 132, w: 21, h: 33 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 166, w: 21, h: 32 }, armour: { x: 40, y: 165, w: 21, h: 31 } },
+                ],
+            },
+            {
+                pos: 'Imperial Thrower', ma: 6, st: 3, ag: 3, pa: 2, av: 9, skills: ['Give and Go', 'Pass', 'Pro'],
+                cost: 75000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 198, w: 23, h: 27 }, armour: { x: 40, y: 198, w: 23, h: 27 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 224, w: 23, h: 26 }, armour: { x: 40, y: 224, w: 23, h: 26 } },
+                ],
+            },
+            {
+                pos: 'Noble Blitzer', ma: 7, st: 3, ag: 3, pa: 4, av: 9, skills: ['Block', 'Catch', 'Pro'],
+                cost: 90000, limit: 2,
+                sprites: [
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 250, w: 25, h: 29 }, armour: { x: 40, y: 250, w: 23, h: 28 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 279, w: 25, h: 29 }, armour: { x: 40, y: 279, w: 23, h: 29 } },
+                ],
+            },
+            {
+                pos: 'Bodyguard', ma: 5, st: 3, ag: 3, pa: 4, av: 9, skills: ['Stand Firm', 'Wrestle'],
+                cost: 85000, limit: 4,
+                sprites: [
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 308, w: 30, h: 34 }, armour: { x: 40, y: 308, w: 30, h: 34 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 342, w: 30, h: 34 }, armour: { x: 40, y: 342, w: 30, h: 33 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 376, w: 30, h: 34 }, armour: { x: 40, y: 376, w: 30, h: 34 } },
+                    { sheet: 'assets/sprites/imperialnobility.gif', base: { x: 0, y: 410, w: 30, h: 34 }, armour: { x: 40, y: 410, w: 30, h: 34 } },
+                ],
+            },
+            {
+                pos: 'Ogre', ma: 5, st: 5, ag: 4, pa: 5, av: 10, skills: ['Bone Head', 'Loner', 'Mighty Blow', 'Thick Skull', 'Throw Team-Mate'],
+                cost: 140000, limit: 1,
+                sprite: { sheet: 'assets/sprites/imperialnobility.gif',
+                    base:   { x: 0, y: 444, w: 37, h: 40 },
+                    armour: { x: 41, y: 444, w: 29, h: 40 },
+                    armourTrimLeft: 2 },
             },
         ],
     },
@@ -269,6 +383,18 @@ const PLAYER_NAMES = {
         'Flink', 'Rattachak', 'Skree', 'Chittr', 'Gnaw', 'Scratch',
         'Skrolk', 'Nurglitch', 'Klawmunkast', 'Snarl', 'Squeak', 'Nibble',
         'Reekit', 'Hackfang', 'Nikkitt', 'Scurry',
+    ],
+    dwarfs: [
+        'Durgin', 'Thorek', 'Brok', 'Kazrik', 'Olfin', 'Dralnir', 'Grimnar', 'Borin',
+        'Hagar', 'Snorri', 'Bardin', 'Gotrek', 'Kragg', 'Bromm', 'Thrund', 'Garrek',
+        'Durik', 'Norgrim', 'Balin', 'Farin', 'Grundi', 'Hlin', 'Morgrim', 'Skarn',
+        'Thordin', 'Ulfar', 'Vagni', 'Wandri', 'Brunin', 'Dwalin',
+    ],
+    imperialnobility: [
+        'Reinhardt', 'Wilhelm', 'Gustav', 'Heinrich', 'Friedrich', 'Konrad', 'Lothar', 'Albrecht',
+        'Maximilian', 'Otto', 'Sigismund', 'Theobald', 'Ludwig', 'Bernhard', 'Dietrich', 'Eberhard',
+        'Florian', 'Gunther', 'Hartmann', 'Karl', 'Leopold', 'Manfred', 'Norbert', 'Rupert',
+        'Stefan', 'Tobias', 'Ulrich', 'Volker', 'Werner', 'Adalbert',
     ],
 };
 
