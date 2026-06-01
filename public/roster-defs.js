@@ -33,7 +33,7 @@ const SKILLS = [
     'Animal Savagery', 'Prehensile Tail',
     'Dauntless', 'Dirty Player', 'No Ball', 'Secret Weapon',
     'Fend', 'Give and Go', 'Pro',
-    'Defensive', 'Diving Tackle', 'Hatred (Troll)',
+    'Defensive', 'Diving Tackle', 'Hatred (Troll)', 'Leader',
 ];
 
 const ROSTER_DEFS = {
