@@ -347,7 +347,21 @@ function expandTeam(dbTeam) {
     // homeColour / awayColour: stored on the team, or fall back to race default
     const homeColour = dbTeam.homeColour || raceDef.colour;
     const awayColour = dbTeam.awayColour || raceDef.colour;
-    return { name: dbTeam.name, homeColour, awayColour, players };
+
+    // Extras may arrive as a parsed object or a raw JSON string (DB row).
+    const ex = (typeof dbTeam.extras === 'string'
+        ? (() => { try { return JSON.parse(dbTeam.extras); } catch { return {}; } })()
+        : dbTeam.extras) || {};
+
+    return {
+        name: dbTeam.name, homeColour, awayColour, players,
+        rerolls:          ex.rerolls          || 0,
+        bribes:           ex.bribes           || 0,
+        cheerleaders:     ex.cheerleaders     || 0,
+        assistantCoaches: ex.assistantCoaches || 0,
+        fanFactor:        ex.fanFactor        || 0,
+        apothecary:       !!ex.apothecary,
+    };
 }
 
 // Total gold cost of a roster array [{pos, name}] for a given race.
@@ -358,6 +372,47 @@ function rosterCost(race, roster) {
         const pd = raceDef.positions.find(p => p.pos === slot.pos);
         return sum + (pd ? pd.cost : 0);
     }, 0);
+}
+
+// ── Team extras (re-rolls, staff, inducements) ─────────────────────
+// Buyable from the team budget at creation. Re-roll price is per race; the rest
+// are flat. Counts are capped by STAFF_LIMITS.
+
+const REROLL_COST = {
+    humans: 50000, orcs: 60000, skaven: 50000, dwarfs: 50000, imperialnobility: 70000,
+};
+const DEFAULT_REROLL_COST = 50000;
+
+const STAFF_COSTS = {
+    bribe:          100000,
+    cheerleader:     10000,
+    assistantCoach:  10000,
+    dedicatedFan:    10000,   // a.k.a. fan factor
+    apothecary:      50000,
+};
+
+const STAFF_LIMITS = {
+    rerolls: 8, bribes: 3, cheerleaders: 12, assistantCoaches: 6, fanFactor: 6, apothecary: 1,
+};
+
+function rerollCost(race) {
+    return REROLL_COST[race] || DEFAULT_REROLL_COST;
+}
+
+// Gold cost of a team's extras {rerolls, bribes, cheerleaders, assistantCoaches, fanFactor, apothecary}.
+function extrasCost(race, extras) {
+    if (!extras) return 0;
+    return (extras.rerolls          || 0) * rerollCost(race)
+         + (extras.bribes           || 0) * STAFF_COSTS.bribe
+         + (extras.cheerleaders     || 0) * STAFF_COSTS.cheerleader
+         + (extras.assistantCoaches || 0) * STAFF_COSTS.assistantCoach
+         + (extras.fanFactor        || 0) * STAFF_COSTS.dedicatedFan
+         + (extras.apothecary ? STAFF_COSTS.apothecary : 0);
+}
+
+// Total gold cost of a team: players + extras.
+function teamCost(race, roster, extras) {
+    return rosterCost(race, roster) + extrasCost(race, extras);
 }
 
 const PLAYER_NAMES = {
@@ -406,5 +461,6 @@ function randomPlayerName(race, pos) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { ROSTER_DEFS, SKILLS, COLOURS, PLAYER_NAMES, expandTeam, rosterCost, randomPlayerName };
+    module.exports = { ROSTER_DEFS, SKILLS, COLOURS, PLAYER_NAMES, expandTeam, rosterCost,
+        STAFF_COSTS, STAFF_LIMITS, rerollCost, extrasCost, teamCost, randomPlayerName };
 }

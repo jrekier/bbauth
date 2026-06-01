@@ -1,12 +1,26 @@
 const express     = require('express');
 const db          = require('../db');
 const { requireAuth } = require('../auth-middleware');
-const { ROSTER_DEFS, rosterCost } = require('../../public/roster-defs');
+const { ROSTER_DEFS, teamCost, STAFF_LIMITS } = require('../../public/roster-defs');
 
 const router = express.Router();
 router.use(requireAuth);
 
-function validateRoster(race, roster, res) {
+// Clamp the buyable extras to safe, integer, in-limit values.
+function sanitizeExtras(raw) {
+    const e = raw && typeof raw === 'object' ? raw : {};
+    const clamp = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
+    return {
+        rerolls:          clamp(e.rerolls,          STAFF_LIMITS.rerolls),
+        bribes:           clamp(e.bribes,           STAFF_LIMITS.bribes),
+        cheerleaders:     clamp(e.cheerleaders,     STAFF_LIMITS.cheerleaders),
+        assistantCoaches: clamp(e.assistantCoaches, STAFF_LIMITS.assistantCoaches),
+        fanFactor:        clamp(e.fanFactor,        STAFF_LIMITS.fanFactor),
+        apothecary:       !!e.apothecary,
+    };
+}
+
+function validateRoster(race, roster, extras, res) {
     const raceDef = ROSTER_DEFS[race];
     if (!raceDef) { res.status(400).json({ error: `Unknown race: ${race}` }); return false; }
     if (roster.length < raceDef.min || roster.length > raceDef.max) {
@@ -19,8 +33,8 @@ function validateRoster(race, roster, res) {
             res.status(400).json({ error: `Too many ${slot.pos}s (max ${posDef.limit})` }); return false;
         }
     }
-    if (rosterCost(race, roster) > raceDef.budget) {
-        res.status(400).json({ error: 'Roster exceeds budget' }); return false;
+    if (teamCost(race, roster, extras) > raceDef.budget) {
+        res.status(400).json({ error: 'Team exceeds budget' }); return false;
     }
     return true;
 }
@@ -36,11 +50,14 @@ function parseColour(raw) {
 }
 
 function expandRow(t) {
+    let extras = null;
+    try { extras = t.extras ? JSON.parse(t.extras) : null; } catch {}
     return {
         ...t,
         roster:      JSON.parse(t.roster),
         homeColour:  parseColour(t.home_colour),
         awayColour:  parseColour(t.away_colour),
+        extras,
     };
 }
 
@@ -62,11 +79,12 @@ router.post('/teams', (req, res) => {
     const { name, race, roster, homeColour, awayColour } = req.body;
     if (!name || !race || !Array.isArray(roster))
         return res.status(400).json({ error: 'name, race, and roster are required' });
-    if (!validateRoster(race, roster, res)) return;
+    const extras = sanitizeExtras(req.body.extras);
+    if (!validateRoster(race, roster, extras, res)) return;
     const hc = homeColour ? JSON.stringify(homeColour) : null;
     const ac = awayColour ? JSON.stringify(awayColour) : null;
-    const result = db.prepare('INSERT INTO teams (user_id, name, race, roster, home_colour, away_colour) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(req.session.userId, name, race, JSON.stringify(roster), hc, ac);
+    const result = db.prepare('INSERT INTO teams (user_id, name, race, roster, home_colour, away_colour, extras) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(req.session.userId, name, race, JSON.stringify(roster), hc, ac, JSON.stringify(extras));
     res.json({ ok: true, id: result.lastInsertRowid });
 });
 
@@ -77,11 +95,12 @@ router.put('/teams/:id', (req, res) => {
     const { name, race, roster, homeColour, awayColour } = req.body;
     if (!name || !race || !Array.isArray(roster))
         return res.status(400).json({ error: 'name, race, and roster are required' });
-    if (!validateRoster(race, roster, res)) return;
+    const extras = sanitizeExtras(req.body.extras);
+    if (!validateRoster(race, roster, extras, res)) return;
     const hc = homeColour ? JSON.stringify(homeColour) : null;
     const ac = awayColour ? JSON.stringify(awayColour) : null;
-    db.prepare('UPDATE teams SET name = ?, race = ?, roster = ?, home_colour = ?, away_colour = ? WHERE id = ?')
-        .run(name, race, JSON.stringify(roster), hc, ac, req.params.id);
+    db.prepare('UPDATE teams SET name = ?, race = ?, roster = ?, home_colour = ?, away_colour = ?, extras = ? WHERE id = ?')
+        .run(name, race, JSON.stringify(roster), hc, ac, JSON.stringify(extras), req.params.id);
     res.json({ ok: true });
 });
 

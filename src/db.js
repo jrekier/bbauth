@@ -48,4 +48,12 @@ db.exec(`
     );
 `);
 
+// ── Migrations ─────────────────────────────────────────────────────
+// Add the team "extras" (re-rolls, staff, inducements) column to older DBs.
+// node:sqlite throws if the column already exists, so guard with a check.
+const teamCols = db.prepare(`PRAGMA table_info(teams)`).all().map(c => c.name);
+if (!teamCols.includes('extras')) {
+    db.exec(`ALTER TABLE teams ADD COLUMN extras TEXT`);
+}
+
 module.exports = db;

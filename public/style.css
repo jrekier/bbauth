@@ -825,6 +825,58 @@ button[type="submit"]:hover,
     flex-shrink: 0;
 }
 
+/* ── Race logos in the builder ────────────────────────────────── */
+.race-card { position: relative; }
+.race-card-logo {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    float: right;
+    margin: -0.4rem -0.4rem 0.4rem 0.6rem;
+    opacity: 0.9;
+}
+.team-name-row { display: flex; align-items: center; gap: 0.6rem; }
+.builder-race-logo {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* ── Team extras (re-rolls, staff) ────────────────────────────── */
+.extras-section { margin-bottom: 1.5rem; }
+.extras-section h3 { margin-bottom: 0.6rem; }
+#extras-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.2rem 1.5rem;
+}
+.extra-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.3rem 0;
+}
+.extra-label { flex: 1; font-size: 0.85rem; }
+.extra-cost  { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
+.extra-stepper { display: inline-flex; align-items: center; gap: 0.4rem; }
+.extra-stepper button {
+    width: 24px; height: 24px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1rem; line-height: 1; padding: 0;
+}
+.extra-stepper button:hover:not(:disabled) { border-color: var(--text-dim); }
+.extra-stepper button:disabled { opacity: 0.3; cursor: not-allowed; }
+.extra-count { min-width: 1.2rem; text-align: center; font-variant-numeric: tabular-nums; }
+.extra-toggle input { cursor: pointer; width: 18px; height: 18px; }
+
+/* Over-budget indicator */
+.budget-over       { color: var(--blood); }
+.budget-fill--over { background: var(--blood) !important; }
+
 .room-player-team {
     font-size: 0.75rem;
     color: var(--text-dim);

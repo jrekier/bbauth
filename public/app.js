@@ -7,6 +7,20 @@ let roster           = [];
 let editingTeamId    = null;   // null = new team, number = editing existing
 let selectedHomeCol  = null;   // [r,g,b]
 let selectedAwayCol  = null;   // [r,g,b]
+let extras           = defaultExtras();
+
+function defaultExtras() {
+    return { rerolls: 0, bribes: 0, cheerleaders: 0, assistantCoaches: 0, fanFactor: 0, apothecary: false };
+}
+
+// Buyable extras shown in the builder. cost() is read live (re-roll price is per race).
+const EXTRAS_META = [
+    { key: 'rerolls',          label: 'Team re-rolls',     cost: () => rerollCost(selectedRace),  max: () => STAFF_LIMITS.rerolls },
+    { key: 'bribes',           label: 'Bribes',            cost: () => STAFF_COSTS.bribe,         max: () => STAFF_LIMITS.bribes },
+    { key: 'cheerleaders',     label: 'Cheerleaders',      cost: () => STAFF_COSTS.cheerleader,   max: () => STAFF_LIMITS.cheerleaders },
+    { key: 'assistantCoaches', label: 'Assistant coaches', cost: () => STAFF_COSTS.assistantCoach,max: () => STAFF_LIMITS.assistantCoaches },
+    { key: 'fanFactor',        label: 'Dedicated fans',    cost: () => STAFF_COSTS.dedicatedFan,  max: () => STAFF_LIMITS.fanFactor },
+];
 
 // ── Helpers ────────────────────────────────────────────────────────
 function raceLogoUrl(race) {
@@ -256,7 +270,7 @@ function renderTeamsList(teams) {
                 canvas.className = 'sprite-preview';
                 canvas.width  = 32;
                 canvas.height = 32;
-                drawSpritePreview(canvas, cardSprite, def.colour);
+                drawSpritePreview(canvas, cardSprite, team.homeColour || def.colour);
                 spritesEl.appendChild(canvas);
             }
         });
@@ -292,22 +306,35 @@ function showBuilder(existingTeam) {
         });
         selectedHomeCol = existingTeam.homeColour || null;
         selectedAwayCol = existingTeam.awayColour || null;
+        extras          = { ...defaultExtras(), ...(existingTeam.extras || {}) };
         document.getElementById('team-name').value        = existingTeam.name;
         document.getElementById('step-race').hidden       = true;
         document.getElementById('step-roster').hidden     = false;
+        setBuilderRaceLogo(selectedRace);
         renderRoster();
         renderPositions();
         renderColourPickers();
+        renderExtras();
         updateBudget();
     } else {
         selectedRace    = null;
         roster          = [];
         selectedHomeCol = null;
         selectedAwayCol = null;
+        extras          = defaultExtras();
         document.getElementById('step-race').hidden       = false;
         document.getElementById('step-roster').hidden     = true;
         renderRaceCards();
     }
+}
+
+// Shows the chosen race's logo in the roster-step header.
+function setBuilderRaceLogo(race) {
+    const img = document.getElementById('builder-race-logo');
+    if (!img) return;
+    const url = raceLogoUrl(race);
+    if (url) { img.src = url; img.hidden = false; }
+    else     { img.hidden = true; }
 }
 
 document.getElementById('btn-builder-back').addEventListener('click', () => showTeams());
@@ -318,7 +345,9 @@ function renderRaceCards() {
     for (const [race, def] of Object.entries(ROSTER_DEFS)) {
         const card = document.createElement('div');
         card.className = 'race-card';
+        const logoUrl = raceLogoUrl(race);
         card.innerHTML = `
+            ${logoUrl ? `<img class="race-card-logo" src="${logoUrl}" alt="">` : ''}
             <h2>${race}</h2>
             <div class="race-meta">
                 Budget: ${def.budget.toLocaleString()} gp<br>
@@ -335,12 +364,15 @@ function selectRace(race) {
     roster          = [];
     selectedHomeCol = null;
     selectedAwayCol = null;
+    extras          = defaultExtras();
     document.getElementById('team-name').value    = '';
     document.getElementById('step-race').hidden   = true;
     document.getElementById('step-roster').hidden = false;
+    setBuilderRaceLogo(race);
     renderRoster();
     renderPositions();
     renderColourPickers();
+    renderExtras();
     updateBudget();
 }
 
@@ -421,7 +453,7 @@ function renderRoster() {
             </div>`;
         const slotSprite = slot.sprite || (posDef && posDef.sprite);
         if (slotSprite && typeof drawSpritePreview === 'function') {
-            drawSpritePreview(li.querySelector('canvas'), slotSprite, def.colour);
+            drawSpritePreview(li.querySelector('canvas'), slotSprite, selectedHomeCol || def.colour);
         }
         li.querySelector('input').addEventListener('input', e => { roster[i].name = e.target.value; });
         li.querySelector('.btn-remove').addEventListener('click', () => {
@@ -452,7 +484,7 @@ function renderPositions() {
 
     def.positions.forEach(pos => {
         const used      = roster.filter(s => s.pos === pos.pos).length;
-        const spent     = rosterCost(selectedRace, roster);
+        const spent     = teamCost(selectedRace, roster, extras);
         const disabled  = used >= pos.limit || roster.length >= def.max || spent + pos.cost > def.budget;
 
         const card = document.createElement('div');
@@ -463,7 +495,7 @@ function renderPositions() {
             <span class="pos-cost">${pos.cost.toLocaleString()} gp · ${used}/${pos.limit}</span>`;
         const previewSprite = pos.sprite || (pos.sprites && pos.sprites[0]);
         if (previewSprite && typeof drawSpritePreview === 'function') {
-            drawSpritePreview(card.querySelector('canvas'), previewSprite, def.colour);
+            drawSpritePreview(card.querySelector('canvas'), previewSprite, selectedHomeCol || def.colour);
         }
         if (!disabled) {
             card.addEventListener('click', () => {
@@ -491,6 +523,9 @@ function renderColourPickers() {
         // If away was using this colour, clear it
         if (arrEq(selectedAwayCol, rgb)) selectedAwayCol = null;
         renderColourPickers();
+        // Re-tint the sprite previews to the new home colour.
+        renderRoster();
+        renderPositions();
     });
     renderColourPicker('away-colour-swatches', selectedAwayCol, selectedHomeCol, rgb => {
         selectedAwayCol = rgb;
@@ -525,12 +560,59 @@ function arrEq(a, b) {
 
 function updateBudget() {
     const def    = ROSTER_DEFS[selectedRace];
-    const spent  = rosterCost(selectedRace, roster);
+    const spent  = teamCost(selectedRace, roster, extras);
     const remain = def.budget - spent;
-    const pct    = (spent / def.budget) * 100;
+    const pct    = Math.min(100, (spent / def.budget) * 100);
     document.getElementById('budget-label').textContent     = `${spent.toLocaleString()} gp spent`;
-    document.getElementById('budget-remaining').textContent = `${remain.toLocaleString()} remaining`;
-    document.getElementById('budget-fill').style.width      = `${pct}%`;
+    const remEl = document.getElementById('budget-remaining');
+    remEl.textContent = `${remain.toLocaleString()} remaining`;
+    remEl.classList.toggle('budget-over', remain < 0);
+    const fill = document.getElementById('budget-fill');
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle('budget-fill--over', remain < 0);
+}
+
+// ── Team extras (re-rolls, staff) ──────────────────────────────────
+function renderExtras() {
+    const list = document.getElementById('extras-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const remaining = ROSTER_DEFS[selectedRace].budget - teamCost(selectedRace, roster, extras);
+
+    EXTRAS_META.forEach(meta => {
+        const count = extras[meta.key] || 0;
+        const cost  = meta.cost();
+        const atMax = count >= meta.max();
+        const row = document.createElement('div');
+        row.className = 'extra-row';
+        row.innerHTML = `
+            <span class="extra-label">${meta.label}</span>
+            <span class="extra-cost">${cost.toLocaleString()} gp</span>
+            <span class="extra-stepper">
+                <button type="button" class="extra-minus" ${count <= 0 ? 'disabled' : ''}>−</button>
+                <span class="extra-count">${count}</span>
+                <button type="button" class="extra-plus" ${atMax || cost > remaining ? 'disabled' : ''}>+</button>
+            </span>`;
+        row.querySelector('.extra-minus').addEventListener('click', () => { extras[meta.key] = count - 1; renderExtras(); updateBudget(); renderPositions(); });
+        row.querySelector('.extra-plus').addEventListener('click',  () => { extras[meta.key] = count + 1; renderExtras(); updateBudget(); renderPositions(); });
+        list.appendChild(row);
+    });
+
+    // Apothecary — a 0/1 toggle.
+    const apCost = STAFF_COSTS.apothecary;
+    const apRow  = document.createElement('div');
+    apRow.className = 'extra-row';
+    apRow.innerHTML = `
+        <span class="extra-label">Apothecary</span>
+        <span class="extra-cost">${apCost.toLocaleString()} gp</span>
+        <label class="extra-toggle">
+            <input type="checkbox" id="extra-apothecary" ${extras.apothecary ? 'checked' : ''}
+                ${!extras.apothecary && apCost > remaining ? 'disabled' : ''}>
+        </label>`;
+    apRow.querySelector('#extra-apothecary').addEventListener('change', e => {
+        extras.apothecary = e.target.checked; renderExtras(); updateBudget(); renderPositions();
+    });
+    list.appendChild(apRow);
 }
 
 // ── Save team ──────────────────────────────────────────────────────
@@ -550,7 +632,7 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
     const method = editingTeamId ? 'PUT' : 'POST';
     const path   = editingTeamId ? `/api/teams/${editingTeamId}` : '/api/teams';
     const data   = await api(method, path, {
-        name, race: selectedRace, roster,
+        name, race: selectedRace, roster, extras,
         homeColour: selectedHomeCol,
         awayColour: selectedAwayCol,
     });
