@@ -344,17 +344,19 @@ function expandTeam(dbTeam) {
             sprite: slot.sprite || posDef.sprite,
         };
     }).filter(Boolean);
-    // homeColour / awayColour: stored on the team, or fall back to race default
-    const homeColour = dbTeam.homeColour || raceDef.colour;
-    const awayColour = dbTeam.awayColour || raceDef.colour;
-
-    // Extras may arrive as a parsed object or a raw JSON string (DB row).
-    const ex = (typeof dbTeam.extras === 'string'
-        ? (() => { try { return JSON.parse(dbTeam.extras); } catch { return {}; } })()
-        : dbTeam.extras) || {};
+    // Colours / extras may arrive parsed (the builder passes camelCase objects)
+    // or raw from a DB row (snake_case `home_colour`, `extras` as JSON strings).
+    const parseVal = (v) => {
+        if (v && typeof v === 'object') return v;
+        if (typeof v === 'string') { try { return JSON.parse(v); } catch { return null; } }
+        return null;
+    };
+    const homeColour = parseVal(dbTeam.homeColour) || parseVal(dbTeam.home_colour) || raceDef.colour;
+    const awayColour = parseVal(dbTeam.awayColour) || parseVal(dbTeam.away_colour) || raceDef.colour;
+    const ex = parseVal(dbTeam.extras) || {};
 
     return {
-        name: dbTeam.name, homeColour, awayColour, players,
+        name: dbTeam.name, race: dbTeam.race, homeColour, awayColour, players,
         rerolls:          ex.rerolls          || 0,
         bribes:           ex.bribes           || 0,
         cheerleaders:     ex.cheerleaders     || 0,
