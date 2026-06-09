@@ -4,6 +4,7 @@ const crypto  = require('node:crypto');
 const db      = require('../db');
 const { requireAuth }  = require('../auth-middleware');
 const { expandTeam }   = require('../../public/roster-defs');
+const { sign }         = require('../sign');
 
 const router = express.Router();
 
@@ -294,23 +295,43 @@ router.post('/room/:id/ready', requireAuth, (req, res) => {
     const updated = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
     broadcast(req.params.id, 'ready', { homeReady: !!updated.home_ready, awayReady: !!updated.away_ready });
 
-    // Both ready → generate tokens and launch
+    // Both ready → pre-register the match with webbb, then launch both players.
     if (updated.home_ready && updated.away_ready) {
         const homeTeam = getTeamForUser(updated.team_id,      updated.home_user_id);
         const awayTeam = getTeamForUser(updated.away_team_id, updated.away_user_id);
 
         if (homeTeam && awayTeam) {
-            const base      = process.env.WEBBB_URL || 'http://localhost:3000';
-            const homeToken = makeToken(updated.home_user_id, updated.home_username, expandTeam(homeTeam));
-            const awayToken = makeToken(updated.away_user_id, updated.away_username, expandTeam(awayTeam));
+            const base        = process.env.WEBBB_URL || 'http://localhost:3000';
+            const homeTeamDef = expandTeam(homeTeam);
+            const awayTeamDef = expandTeam(awayTeam);
+            const homeToken   = makeToken(updated.home_user_id, updated.home_username, homeTeamDef);
+            const awayToken   = makeToken(updated.away_user_id, updated.away_username, awayTeamDef);
 
-            sendTo(req.params.id, updated.home_user_id, 'launch', {
-                url: `${base}?token=${homeToken}&roomId=${req.params.id}&action=create`,
+            // Register the game room server-to-server BEFORE redirecting either
+            // browser. The room then exists before anyone connects, so there is no
+            // create/join race — each player just attaches to their slot. Only once
+            // webbb confirms do we push the launch URLs (no action param needed —
+            // the token's userId identifies the side).
+            const regBody = JSON.stringify({
+                roomId: req.params.id,
+                home: { userId: updated.home_user_id, username: updated.home_username, teamDef: homeTeamDef },
+                away: { userId: updated.away_user_id, username: updated.away_username, teamDef: awayTeamDef },
             });
-            sendTo(req.params.id, updated.away_user_id, 'launch', {
-                url: `${base}?token=${awayToken}&roomId=${req.params.id}&action=join`,
-            });
-            // Room and messages stay alive; cleanup happens when all SSE clients disconnect.
+            fetch(`${base}/internal/match`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BB-Signature': sign(regBody) },
+                body:    regBody,
+            })
+                .then(r => {
+                    if (!r.ok) throw new Error(`webbb returned ${r.status}`);
+                    sendTo(req.params.id, updated.home_user_id, 'launch', { url: `${base}?token=${homeToken}&roomId=${req.params.id}` });
+                    sendTo(req.params.id, updated.away_user_id, 'launch', { url: `${base}?token=${awayToken}&roomId=${req.params.id}` });
+                    // Room and messages stay alive; cleanup happens when all SSE clients disconnect.
+                })
+                .catch(e => {
+                    console.error(`Match registration failed for room ${req.params.id}:`, e.message);
+                    broadcast(req.params.id, 'launch_failed', { error: 'Could not start the game — try readying up again.' });
+                });
         }
     }
 

@@ -46,6 +46,21 @@ db.exec(`
         message    TEXT    NOT NULL,
         created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    -- Historical record of completed/abandoned games. Deliberately NOT a foreign
+    -- key on users: recording that a match happened must never fail (or be wiped)
+    -- just because a player later deletes their account. The ids are kept as-is.
+    CREATE TABLE IF NOT EXISTS matches (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id       TEXT    NOT NULL,
+        home_user_id  INTEGER,
+        away_user_id  INTEGER,
+        home_score    INTEGER NOT NULL DEFAULT 0,
+        away_score    INTEGER NOT NULL DEFAULT 0,
+        winner        TEXT,
+        status        TEXT    NOT NULL,
+        created_at    INTEGER NOT NULL DEFAULT (unixepoch())
+    );
 `);
 
 // ── Migrations ─────────────────────────────────────────────────────

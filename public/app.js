@@ -51,11 +51,44 @@ async function boot() {
     const data = await api('GET', '/api/me');
     if (data.userId) {
         currentUser = data;
-        showLobby();
+        if (!resumeGameIfAny()) showLobby();
     } else {
+        localStorage.removeItem('bbInGame');   // not logged in — drop any stale game marker
         showView('view-auth');
     }
 }
+
+// If this page was refreshed mid-game, re-enter the room and the game iframe so
+// the player isn't dumped back to the lobby. Returns true if a game was resumed.
+function resumeGameIfAny() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem('bbInGame') || 'null'); } catch { saved = null; }
+    if (!saved || !saved.origin || !saved.roomId) return false;
+
+    // Re-open the staging room (restores chat + the SSE channel), then re-enter
+    // the playing layout pointing the iframe at the bare webbb origin — webbb
+    // reconnects the live game itself.
+    showRoom(saved.roomId);
+    enterPlayingState(saved.origin + '/');
+    return true;
+}
+
+// The game iframe (webbb) tells us when the match has ended, so a later refresh
+// won't try to resume a finished game (which would just show a dead room).
+window.addEventListener('message', e => {
+    const d = e.data;
+    if (!d || d.source !== 'webbb') return;
+    if (d.type === 'gameover') {
+        // Natural full-time: keep showing the result in the iframe, but don't
+        // resume this finished game on a later refresh.
+        localStorage.removeItem('bbInGame');
+    } else if (d.type === 'ended') {
+        // The game is gone (abandoned, or a stale resume that couldn't reconnect)
+        // — tear the dead iframe down and return to the lobby.
+        tearDownGame();
+        showLobby();
+    }
+});
 
 // ── Auth view ──────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
@@ -109,6 +142,7 @@ async function logout() {
 let _lobbyPollTimer = null;
 
 function showLobby() {
+    localStorage.removeItem('bbInGame');   // back at the lobby means we're not in a game
     document.getElementById('lobby-greeting').textContent = currentUser.username;
     showView('view-lobby');
     pollLobby();
@@ -904,6 +938,14 @@ document.getElementById('btn-room-ready').addEventListener('click', async () => 
 
 // ── Playing-state transition ───────────────────────────────────────
 function enterPlayingState(url) {
+    // Remember we're in a game so a refresh of this (bbauth) page can drop us
+    // straight back in instead of losing the iframe. We only need webbb's origin:
+    // on resume we reload the iframe at the bare origin and webbb reconnects via
+    // its own (non-expiring) per-side token — never replay the one-time launch URL.
+    try {
+        localStorage.setItem('bbInGame', JSON.stringify({ origin: new URL(url).origin, roomId: _currentRoomId }));
+    } catch {}
+
     document.getElementById('room-players').hidden = true;
     document.getElementById('room-actions').hidden = true;
     const iframe = document.getElementById('room-game-frame');
@@ -924,6 +966,7 @@ function enterPlayingState(url) {
 }
 
 function tearDownGame() {
+    localStorage.removeItem('bbInGame');
     const iframe = document.getElementById('room-game-frame');
     iframe.src    = 'about:blank';
     iframe.hidden = true;

@@ -12,8 +12,10 @@ const STATIC_URL = process.env.STATIC_URL || '';
 // ── Middleware ────────────────────────────────────────────────────
 // These run on every request, in order, before any route handler.
 
-// Parse incoming JSON bodies so req.body is available in routes.
-app.use(express.json());
+// Parse incoming JSON bodies so req.body is available in routes. The `verify`
+// hook keeps the raw bytes around so signed internal calls (from webbb) can be
+// HMAC-verified against exactly what was sent.
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
 // Session cookie management.
 // express-session generates a session ID, stores it in a signed cookie,
@@ -51,6 +53,10 @@ app.use(express.static('public'));
 // Each router is a mini Express app mounted at a path prefix.
 // We'll add these one by one as we build them.
 
+// internal must be mounted before team — team's router.use(requireAuth) would
+// otherwise 401 every request that falls through to it, including signed
+// server-to-server calls that carry no session cookie.
+app.use('/api', require('./src/routes/internal'));
 app.use('/api', require('./src/routes/auth'));
 app.use('/api', require('./src/routes/team'));
 app.use('/api', require('./src/routes/play'));
