@@ -299,7 +299,10 @@ function leaveSpectate() {
     const iframe = document.getElementById('room-game-frame');
     iframe.src    = 'about:blank';
     iframe.hidden = true;
-    document.getElementById('room-players').hidden = false;   // restore for normal room use
+    document.getElementById('room-players').hidden    = false;   // restore for normal room use
+    document.getElementById('room-actions').hidden    = false;
+    document.getElementById('room-watch-bar').hidden  = true;
+    document.getElementById('btn-leave-seat').hidden  = true;
     document.getElementById('room-sidebar-bar').hidden = true;
     document.getElementById('btn-exit-game').textContent = 'Quit Game';
     document.body.classList.remove('game-active');
@@ -364,8 +367,8 @@ function renderLobbyRooms(rooms) {
                     <span class="lobby-room-meta">${teamLabel}</span>
                 </div>
                 <div class="lobby-room-btns">
-                    <button class="btn-ghost lobby-watch-btn">Watch</button>
-                    <button class="btn-primary lobby-join-btn">Join →</button>
+                    <button class="btn-ghost lobby-watch-btn">Join</button>
+                    <button class="btn-primary lobby-join-btn">Play</button>
                 </div>
             </div>`;
         card.querySelector('.lobby-join-btn').addEventListener('click', () => joinRoom(room.id));
@@ -439,6 +442,51 @@ function hideTeamPicker() {
 }
 
 document.getElementById('btn-picker-cancel').addEventListener('click', hideTeamPicker);
+
+// ── Inline roster panels (the pre-game "tale of the tape") ─────────
+// Each side's full roster is shown side by side, refreshed whenever a team is
+// picked/changed, so everyone can scout the matchup before kickoff.
+async function loadRoster(side) {
+    const col = document.getElementById(`roster-col-${side}`);
+    if (!col || !_currentRoomId) return;
+    try {
+        const data = await api('GET', `/api/room/${_currentRoomId}/team/${side}`);
+        renderRosterInto(col, side, data && data.team);
+    } catch { /* keep whatever's shown */ }
+}
+
+function renderRosterInto(col, side, team) {
+    col.innerHTML = '';
+    if (!team) {
+        const p = document.createElement('p');
+        p.className = 'roster-col-empty';
+        p.textContent = 'No team selected yet.';
+        col.appendChild(p);
+        return;
+    }
+    const def = ROSTER_DEFS[team.race];
+    team.roster.forEach(slot => {
+        const posDef = def && def.positions.find(p => p.pos === slot.pos);
+        const skills = (slot.skills && slot.skills.length ? slot.skills : (posDef ? posDef.skills : [])) || [];
+        // Compact, label-free stat line (MA·ST·AG·PA·AV); legend in the tooltip.
+        const stats  = posDef ? `${posDef.ma}·${posDef.st}·${posDef.ag}+·${posDef.pa}+·${posDef.av}+` : '';
+        const row = document.createElement('div');
+        row.className = 'tv-row';
+        row.innerHTML = `
+            <canvas class="sprite-preview" width="32" height="32"></canvas>
+            <div class="tv-line">
+                <span class="tv-name">${escHtml(slot.name || slot.pos)}</span>
+                <span class="tv-pos">${escHtml(slot.pos)}</span>
+                <span class="tv-stats" title="MA · ST · AG · PA · AV">${stats}</span>
+                ${skills.length ? `<span class="tv-skills" title="${escHtml(skills.join(', '))}">${skills.map(s => `<span class="skill-chip">${escHtml(s)}</span>`).join('')}</span>` : ''}
+            </div>`;
+        const sprite = slot.sprite || (posDef && posDef.sprite);
+        if (sprite && typeof drawSpritePreview === 'function') {
+            drawSpritePreview(row.querySelector('canvas'), sprite, team.homeColour || (def && def.colour));
+        }
+        col.appendChild(row);
+    });
+}
 
 // ── Teams list view ────────────────────────────────────────────────
 async function showTeams() {
@@ -871,6 +919,11 @@ function showRoom(roomId) {
     _isHomeInRoom  = false;
     _myTeamSet     = false;
     document.getElementById('room-id-title').textContent = `Room ${roomId}`;
+    _spectating = false;   // entering as a player
+    document.getElementById('room-watch-bar').hidden = true;
+    document.getElementById('btn-leave-seat').hidden = true;
+    document.getElementById('room-players').hidden   = false;
+    document.getElementById('room-actions').hidden   = false;
     document.getElementById('room-messages').innerHTML   = '';
     document.getElementById('room-chat-text').value      = '';
     document.getElementById('room-chat-text').disabled   = false;   // chat is open from room creation
@@ -901,6 +954,8 @@ function connectRoomSSE(roomId) {
         document.getElementById('room-away-status').textContent   = 'Not ready';
         document.getElementById('room-chat-text').disabled = false;
         document.getElementById('btn-room-send').disabled  = false;
+        document.getElementById('room-watch-bar').hidden   = true;   // seat taken
+        loadRoster('away');
         refreshReadyButton();
         appendSystemMessage(`${d.awayUsername} joined the room.`);
     });
@@ -908,6 +963,12 @@ function connectRoomSSE(roomId) {
     es.addEventListener('message', e => {
         const d = JSON.parse(e.data);
         appendChatMessage(d.username, d.message);
+    });
+
+    es.addEventListener('spectator', e => {
+        const d = JSON.parse(e.data);
+        if (d.username === currentUser.username) return;   // don't narrate yourself
+        appendSystemMessage(`${d.username} ${d.action === 'joined' ? 'is now watching' : 'stopped watching'}.`);
     });
 
     es.addEventListener('left', e => {
@@ -918,9 +979,11 @@ function connectRoomSSE(roomId) {
         document.getElementById('btn-pick-team-away').hidden      = true;
         document.getElementById('room-away-status').textContent   = '';
         _roomAway = null;
+        document.getElementById('room-watch-bar').hidden = !_spectating;   // seat reopened
+        renderRosterInto(document.getElementById('roster-col-away'), 'away', null);
         updateReadyState(false, false);
         refreshReadyButton();
-        appendSystemMessage(`${d.username} left the room.`);
+        if (d.username !== currentUser.username) appendSystemMessage(`${d.username} left the seat.`);
     });
 
     es.addEventListener('team', e => {
@@ -939,6 +1002,7 @@ function connectRoomSSE(roomId) {
             _myTeamSet = true;
             refreshReadyButton();
         }
+        loadRoster(d.side);   // refresh the side's roster panel
     });
 
     es.addEventListener('ready', e => {
@@ -1012,6 +1076,13 @@ function renderRoomInit(state) {
     // Chat is open from room creation for everyone in the room.
     document.getElementById('room-chat-text').disabled = false;
     document.getElementById('btn-room-send').disabled  = false;
+    // Watchers see "Take the open seat" while the away seat is empty.
+    document.getElementById('room-watch-bar').hidden = !(_spectating && !hasAway);
+    // The seated away player can step down to observer without leaving the room.
+    document.getElementById('btn-leave-seat').hidden = _spectating || _isHomeInRoom;
+    // Populate both roster panels (the "tale of the tape").
+    loadRoster('home');
+    loadRoster('away');
     refreshReadyButton();
 
     state.messages.forEach(m => appendChatMessage(m.username, m.message));
@@ -1117,6 +1188,25 @@ function appendSystemMessage(text) {
 function escHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// Watcher claims the open seat → join as the away player (reconnects the room
+// in player mode via the normal join flow).
+document.getElementById('btn-take-seat').addEventListener('click', () => {
+    if (_currentRoomId) joinRoom(_currentRoomId);
+});
+
+// Seated away player steps down to observer — vacates the seat but stays in the
+// room (chat + watching). The SSE stays open; the 'left' broadcast reopens the
+// seat and re-shows the "take the open seat" button.
+document.getElementById('btn-leave-seat').addEventListener('click', async () => {
+    if (!_currentRoomId) return;
+    _spectating   = true;
+    _isHomeInRoom = false;
+    document.getElementById('room-id-title').textContent = 'Watching';
+    document.getElementById('room-actions').hidden   = true;
+    document.getElementById('btn-leave-seat').hidden  = true;
+    await api('DELETE', `/api/lobby/${_currentRoomId}`);
+});
 
 // Send chat message
 document.getElementById('btn-room-send').addEventListener('click', sendRoomMessage);

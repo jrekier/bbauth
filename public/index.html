@@ -188,26 +188,50 @@
             <p class="subtitle">Staging Room</p>
         </header>
 
+        <!-- Field-aligned matchup: name / team / action / status are shared grid
+             rows, so the home and away sides always line up. Two background
+             panels give each team the "card" look. -->
         <div class="room-players" id="room-players">
-            <div class="room-player" id="room-player-home">
-                <div class="room-player-name" id="room-home-username">—</div>
-                <div class="room-player-team-row">
-                    <img class="race-logo" id="room-home-logo" hidden alt="">
-                    <div class="room-player-team" id="room-home-team"></div>
-                </div>
-                <button class="btn-ghost room-pick-team-btn" id="btn-pick-team-home" hidden>Pick Team</button>
-                <div class="room-player-status" id="room-home-status">Not ready</div>
-            </div>
+            <div class="mu-card mu-home"></div>
+            <div class="mu-card mu-away"></div>
             <div class="room-vs">VS</div>
-            <div class="room-player" id="room-player-away">
-                <div class="room-player-name" id="room-away-username">—</div>
-                <div class="room-player-team-row">
-                    <img class="race-logo" id="room-away-logo" hidden alt="">
-                    <div class="room-player-team" id="room-away-team">Waiting for opponent…</div>
-                </div>
-                <button class="btn-ghost room-pick-team-btn" id="btn-pick-team-away" hidden>Pick Team</button>
-                <div class="room-player-status" id="room-away-status"></div>
+
+            <div class="mu-cell mu-home mu-r-name">
+                <img class="race-logo" id="room-home-logo" hidden alt="">
+                <span class="room-player-name" id="room-home-username">—</span>
             </div>
+            <div class="mu-cell mu-away mu-r-name">
+                <img class="race-logo" id="room-away-logo" hidden alt="">
+                <span class="room-player-name" id="room-away-username">—</span>
+            </div>
+
+            <div class="mu-cell mu-home mu-r-team"><span class="room-player-team" id="room-home-team"></span></div>
+            <div class="mu-cell mu-away mu-r-team"><span class="room-player-team" id="room-away-team">Waiting for opponent…</span></div>
+
+            <div class="mu-cell mu-home mu-r-status"><span class="room-player-status" id="room-home-status">Not ready</span></div>
+            <div class="mu-cell mu-away mu-r-status"><span class="room-player-status" id="room-away-status"></span></div>
+        </div>
+
+        <!-- Controls under the matchup band -->
+        <div class="room-actions" id="room-actions">
+            <button class="btn-ghost room-pick-team-btn" id="btn-pick-team-home" hidden>Pick Team</button>
+            <button class="btn-ghost room-pick-team-btn" id="btn-pick-team-away" hidden>Pick Team</button>
+            <button class="btn-primary" id="btn-room-ready" disabled>Ready</button>
+            <button class="btn-ghost" id="btn-leave-seat" hidden>Leave seat</button>
+            <p class="room-ready-hint" id="room-ready-hint"></p>
+        </div>
+
+        <!-- Watcher: option to claim the open seat and play instead of watching -->
+        <div class="room-watch-bar" id="room-watch-bar" hidden>
+            <button class="btn-primary" id="btn-take-seat">Take the open seat</button>
+        </div>
+
+        <!-- Tale of the tape: two independent team sheets. Each team is one
+             bordered panel; players are borderless rows inside it, so the two
+             columns never look "staggered" against each other. -->
+        <div class="rosters" id="rosters">
+            <div class="roster-col" id="roster-col-home"></div>
+            <div class="roster-col" id="roster-col-away"></div>
         </div>
 
         <!-- Game iframe -->
@@ -219,17 +243,13 @@
             <button class="btn-ghost" id="btn-chat-toggle">Chat ▲</button>
         </div>
 
+        <!-- Slim chat strip below the rosters -->
         <div class="room-chat" id="room-chat">
             <div class="room-messages" id="room-messages"></div>
             <div class="room-chat-input">
                 <input type="text" id="room-chat-text" placeholder="Type a message…" maxlength="280" disabled>
                 <button class="btn-ghost" id="btn-room-send" disabled>Send</button>
             </div>
-        </div>
-
-        <div class="room-actions" id="room-actions">
-            <button class="btn-primary" id="btn-room-ready" disabled>Ready</button>
-            <p class="room-ready-hint" id="room-ready-hint"></p>
         </div>
     </div>
 

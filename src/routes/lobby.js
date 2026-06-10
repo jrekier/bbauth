@@ -320,12 +320,24 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
         messages,
     });
 
+    // Announce watchers (anyone connecting who isn't one of the two players).
+    // Remember on the connection whether we announced them, so we only emit the
+    // matching "stopped watching" — never for a player whose seat was vacated.
+    res._announcedSpectator = req.session.userId !== room.home_user_id && req.session.userId !== room.away_user_id;
+    if (res._announcedSpectator) broadcast(roomId, 'spectator', { username: req.session.username, action: 'joined' });
+
     // Keepalive ping every 25 s
     const ping = setInterval(() => res.write(': ping\n\n'), 25000);
 
     req.on('close', () => {
         clearInterval(ping);
         getRoom(roomId).delete(req.session.userId);
+        // Announce "stopped watching" only for a connection we announced as a
+        // watcher AND who still isn't in a seat — so taking a seat (then the old
+        // watcher socket closing) stays silent.
+        const cur = db.prepare('SELECT home_user_id, away_user_id FROM pending_rooms WHERE id = ?').get(roomId);
+        if (res._announcedSpectator && cur && req.session.userId !== cur.home_user_id && req.session.userId !== cur.away_user_id)
+            broadcast(roomId, 'spectator', { username: req.session.username, action: 'left' });
         if (getRoom(roomId).size === 0) {
             roomClients.delete(roomId);
             // Defer cleanup so brief reconnects don't wipe the room
@@ -338,6 +350,24 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
             }, 30000);
         }
     });
+});
+
+// ── GET /api/room/:id/team/:side — scout a side's roster ──────────
+// Any room participant (player or watcher) may inspect either team before the
+// game starts. Returns the raw roster (the client renders stats from its own
+// ROSTER_DEFS). Reflects the team currently selected, so last-minute swaps show.
+router.get('/room/:id/team/:side', requireAuth, (req, res) => {
+    const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
+    const teamId = req.params.side === 'home' ? room.team_id
+                 : req.params.side === 'away' ? room.away_team_id
+                 : null;
+    if (!teamId) return res.json({ team: null });   // no team picked for that seat yet
+
+    const t = db.prepare('SELECT name, race, roster, home_colour FROM teams WHERE id = ?').get(teamId);
+    if (!t) return res.json({ team: null });
+    res.json({ team: { name: t.name, race: t.race, roster: JSON.parse(t.roster), homeColour: parseColour(t.home_colour) } });
 });
 
 // ── POST /api/room/:id/message — send a chat message ──────────────

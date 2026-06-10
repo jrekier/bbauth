@@ -9,6 +9,7 @@
 // Honours DB_PATH like the app does, so it targets the same local DB. NEVER run
 // this against the Railway volume — it deletes all users, teams, and matches.
 
+require('dotenv').config();           // honour DB_PATH from .env, like the server
 const db     = require('./src/db');   // opens the DB and ensures the schema
 const bcrypt = require('bcryptjs');
 const { ROSTER_DEFS } = require('./public/roster-defs');
