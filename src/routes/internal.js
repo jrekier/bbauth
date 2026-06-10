@@ -6,8 +6,22 @@
 const express = require('express');
 const db      = require('../db');
 const { verify } = require('../sign');
+const lobby   = require('./lobby');   // setLiveGame / endLiveGame
 
 const router = express.Router();
+
+// ── POST /api/internal/match-update ───────────────────────────────
+// webbb pushes a live snapshot as a game progresses (deduped on its side) so
+// the lobby can show ongoing games and mark players "in game".
+router.post('/internal/match-update', (req, res) => {
+    if (!verify(req.rawBody, req.headers['x-bb-signature'])) {
+        return res.status(401).json({ error: 'Bad signature' });
+    }
+    const { roomId, score, turn, half, active, phase } = req.body;
+    if (!roomId) return res.status(400).json({ error: 'Missing roomId' });
+    lobby.setLiveGame(roomId, { score, turn, half, active, phase });
+    res.json({ ok: true });
+});
 
 // ── POST /api/internal/match-result ───────────────────────────────
 // webbb reports how a game ended. We record it and retire the staging room.
@@ -30,9 +44,11 @@ router.post('/internal/match-result', (req, res) => {
         status,
     );
 
-    // The staging room has served its purpose — remove it and its chat.
+    // The staging room has served its purpose — remove it and its chat, and
+    // drop the game from the lobby's ongoing-games list.
     db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(roomId);
     db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(roomId);
+    lobby.endLiveGame(roomId);
 
     res.json({ ok: true });
 });

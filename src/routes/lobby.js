@@ -66,6 +66,134 @@ function getTeamForUser(teamId, userId) {
     return { ...row, roster: JSON.parse(row.roster), homeColour: parseColour(row.home_colour), awayColour: parseColour(row.away_colour) };
 }
 
+// ── Global lobby channel: presence + chat + ongoing games ──────────
+// One SSE stream per logged-in user in the bbauth app (kept open across the
+// whole session, including while in a game). Carries chat, presence (who's
+// online + whether they're in a game), and the live ongoing-games list. A user
+// may have several tabs open, so we track a set of responses per user.
+// lobbyClients: Map<userId, { username, conns: Set<res> }>
+const lobbyClients = new Map();
+
+// Live games in progress, fed by webbb via /api/internal/match-update.
+// roomId → { roomId, homeUserId, awayUserId, homeUsername, awayUsername,
+//            homeRace, awayRace, score, turn, half, active, phase }
+const liveGames = new Map();
+
+function lobbyBroadcast(eventName, data) {
+    const text = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of lobbyClients.values())
+        for (const res of client.conns) res.write(text);
+}
+
+// Which game (if any) a user is currently playing in.
+function gameForUser(userId) {
+    for (const g of liveGames.values())
+        if (g.homeUserId === userId || g.awayUserId === userId) return g;
+    return null;
+}
+
+// Presence = online users (SSE-connected), each tagged in-game or in-lobby.
+function lobbyPresence() {
+    return [...lobbyClients.entries()]
+        .map(([userId, c]) => {
+            const g = gameForUser(userId);
+            return { username: c.username, status: g ? 'in-game' : 'lobby', roomId: g ? g.roomId : null };
+        })
+        .sort((a, b) => a.username.localeCompare(b.username));
+}
+
+// Public view of the ongoing games for the lobby list.
+function lobbyGamesList() {
+    return [...liveGames.values()].map(g => ({
+        roomId: g.roomId,
+        home: g.homeUsername, away: g.awayUsername,
+        homeRace: g.homeRace, awayRace: g.awayRace,
+        homeTeam: g.homeTeamName, awayTeam: g.awayTeamName,
+        score: g.score, turn: g.turn, half: g.half, phase: g.phase,
+    }));
+}
+
+function broadcastPresence() { lobbyBroadcast('presence', { online: lobbyPresence() }); }
+function broadcastGames()    { lobbyBroadcast('games',    { games: lobbyGamesList() }); }
+
+// Upsert a live game from a webbb match-update. On first sight we enrich it with
+// the players/teams from the staging room (still present until the match ends).
+function setLiveGame(roomId, partial) {
+    let g = liveGames.get(roomId);
+    if (!g) {
+        const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(roomId);
+        if (!room) return;   // result already processed / unknown room — ignore
+        g = {
+            roomId,
+            homeUserId: room.home_user_id, awayUserId: room.away_user_id,
+            homeUsername: room.home_username, awayUsername: room.away_username,
+            homeRace: room.race, awayRace: room.away_race,
+            homeTeamName: room.team_name, awayTeamName: room.away_team_name,
+            score: { home: 0, away: 0 }, turn: null, half: null, active: null, phase: null,
+        };
+        liveGames.set(roomId, g);
+    }
+    Object.assign(g, partial);
+    broadcastGames();
+    broadcastPresence();   // a player's status may have flipped to in-game
+}
+
+function endLiveGame(roomId) {
+    if (!liveGames.delete(roomId)) return;
+    broadcastGames();
+    broadcastPresence();
+}
+
+// ── GET /api/lobby/events — global lobby SSE ───────────────────────
+router.get('/lobby/events', requireAuth, (req, res) => {
+    res.setHeader('Content-Type',  'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection',    'keep-alive');
+    res.flushHeaders();
+
+    const { userId, username } = req.session;
+    let entry = lobbyClients.get(userId);
+    const firstConnection = !entry;
+    if (!entry) { entry = { username, conns: new Set() }; lobbyClients.set(userId, entry); }
+    entry.conns.add(res);
+
+    // Opening snapshot: presence + ongoing games + recent chat backlog.
+    const messages = db.prepare(
+        'SELECT username, message FROM lobby_messages ORDER BY id DESC LIMIT 50'
+    ).all().reverse();
+    sseWrite(res, 'init', { online: lobbyPresence(), games: lobbyGamesList(), messages });
+
+    // Announce arrival only when the user wasn't already present (another tab).
+    if (firstConnection) broadcastPresence();
+
+    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+
+    req.on('close', () => {
+        clearInterval(ping);
+        const e = lobbyClients.get(userId);
+        if (!e) return;
+        e.conns.delete(res);
+        if (e.conns.size === 0) {
+            lobbyClients.delete(userId);
+            broadcastPresence();
+        }
+    });
+});
+
+// ── POST /api/lobby/chat — send a global lobby message ─────────────
+router.post('/lobby/chat', requireAuth, (req, res) => {
+    const text = (req.body.message || '').trim().slice(0, 280);
+    if (!text) return res.status(400).json({ error: 'Message is empty' });
+
+    db.prepare('INSERT INTO lobby_messages (user_id, username, message) VALUES (?, ?, ?)')
+        .run(req.session.userId, req.session.username, text);
+    // Keep only the most recent ~200 messages.
+    db.prepare('DELETE FROM lobby_messages WHERE id <= (SELECT MAX(id) - 200 FROM lobby_messages)').run();
+
+    lobbyBroadcast('chat', { username: req.session.username, message: text });
+    res.json({ ok: true });
+});
+
 // ── GET /api/lobby ─────────────────────────────────────────────────
 // Only show rooms that have no away user yet (still open to join).
 router.get('/lobby', requireAuth, (_req, res) => {
@@ -153,6 +281,7 @@ router.delete('/lobby/:id', requireAuth, (req, res) => {
     broadcast(req.params.id, 'closed', { by: req.session.username });
     db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(req.params.id);
     db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(req.params.id);
+    endLiveGame(req.params.id);
     setTimeout(() => roomClients.delete(req.params.id), 2000);
     res.json({ ok: true });
 });
@@ -202,6 +331,7 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
                 if (!roomClients.has(roomId)) {
                     db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(roomId);
                     db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(roomId);
+                    endLiveGame(roomId);
                 }
             }, 30000);
         }
@@ -239,6 +369,7 @@ router.post('/room/:id/quit', requireAuth, (req, res) => {
     broadcast(req.params.id, 'quit', { username: req.session.username });
     db.prepare('DELETE FROM room_messages WHERE room_id = ?').run(req.params.id);
     db.prepare('DELETE FROM pending_rooms WHERE id = ?').run(req.params.id);
+    endLiveGame(req.params.id);   // drop it from the lobby immediately, not after webbb's grace
     setTimeout(() => roomClients.delete(req.params.id), 2000);
 
     res.json({ ok: true });
@@ -339,3 +470,6 @@ router.post('/room/:id/ready', requireAuth, (req, res) => {
 });
 
 module.exports = router;
+// Live-game hooks called by the signed internal routes (see internal.js).
+module.exports.setLiveGame = setLiveGame;
+module.exports.endLiveGame = endLiveGame;

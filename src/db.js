@@ -61,6 +61,16 @@ db.exec(`
         status        TEXT    NOT NULL,
         created_at    INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    -- Global lobby chat. Kept small (pruned on insert); history is just the
+    -- recent backlog new arrivals see when they open the lobby.
+    CREATE TABLE IF NOT EXISTS lobby_messages (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL,
+        username   TEXT    NOT NULL,
+        message    TEXT    NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
 `);
 
 // ── Migrations ─────────────────────────────────────────────────────

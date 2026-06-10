@@ -56,13 +56,38 @@
             <p class="subtitle">Online Lobby</p>
         </header>
 
-        <div class="lobby-actions">
-            <button class="btn-primary" id="btn-create-room">+ Create Game</button>
-        </div>
+        <div class="lobby-grid">
+            <div class="lobby-main">
+                <div class="lobby-actions">
+                    <button class="btn-primary" id="btn-create-room">+ Create Game</button>
+                </div>
 
-        <div id="lobby-open-rooms">
-            <h3>Open games</h3>
-            <div id="lobby-room-list"></div>
+                <div id="lobby-open-rooms">
+                    <h3>Open games</h3>
+                    <div id="lobby-room-list"></div>
+                </div>
+            </div>
+
+            <aside class="lobby-side">
+                <div class="lobby-ongoing" id="lobby-ongoing" hidden>
+                    <h3>Ongoing games</h3>
+                    <div id="lobby-ongoing-list"></div>
+                </div>
+
+                <div class="lobby-online">
+                    <h3>Online <span id="lobby-online-count" class="lobby-online-count"></span></h3>
+                    <ul id="lobby-online-list" class="lobby-online-list"></ul>
+                </div>
+
+                <div class="lobby-chat">
+                    <h3>Lobby chat</h3>
+                    <div class="room-messages" id="lobby-messages"></div>
+                    <div class="room-chat-input">
+                        <input type="text" id="lobby-chat-text" placeholder="Say hi to the lobby…" maxlength="280">
+                        <button class="btn-ghost" id="btn-lobby-send">Send</button>
+                    </div>
+                </div>
+            </aside>
         </div>
     </div>
 

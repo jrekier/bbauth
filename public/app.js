@@ -51,6 +51,7 @@ async function boot() {
     const data = await api('GET', '/api/me');
     if (data.userId) {
         currentUser = data;
+        connectLobbySSE();   // stay online for the whole session, even mid-game
         if (!resumeGameIfAny()) showLobby();
     } else {
         localStorage.removeItem('bbInGame');   // not logged in — drop any stale game marker
@@ -131,6 +132,7 @@ async function logout() {
     selectedRace = null;
     roster       = [];
     hideLobby();
+    disconnectLobbySSE();
     showView('view-auth');
 }
 
@@ -147,12 +149,124 @@ function showLobby() {
     showView('view-lobby');
     pollLobby();
     _lobbyPollTimer = setInterval(pollLobby, 3000);
+    connectLobbySSE();
 }
 
 function hideLobby() {
     clearInterval(_lobbyPollTimer);
     _lobbyPollTimer = null;
+    // The lobby SSE intentionally stays open across views (including in-game) so
+    // the player remains "online" and keeps receiving chat/presence/games. It is
+    // only torn down on logout (disconnectLobbySSE).
 }
+
+// ── Lobby presence + chat + ongoing games (global SSE) ─────────────
+let _lobbySSE = null;
+
+function connectLobbySSE() {
+    // Kept alive for the whole session — don't reconnect if already open/connecting.
+    if (_lobbySSE && _lobbySSE.readyState !== EventSource.CLOSED) return;
+    const es = new EventSource('/api/lobby/events');
+    _lobbySSE = es;
+
+    es.addEventListener('init', e => {
+        const d = JSON.parse(e.data);
+        renderLobbyOnline(d.online);
+        renderOngoingGames(d.games);
+        document.getElementById('lobby-messages').innerHTML = '';
+        d.messages.forEach(m => appendLobbyMessage(m.username, m.message));
+    });
+    es.addEventListener('chat', e => {
+        const d = JSON.parse(e.data);
+        appendLobbyMessage(d.username, d.message);
+    });
+    es.addEventListener('presence', e => {
+        const d = JSON.parse(e.data);
+        renderLobbyOnline(d.online);
+    });
+    es.addEventListener('games', e => {
+        const d = JSON.parse(e.data);
+        renderOngoingGames(d.games);
+    });
+}
+
+function disconnectLobbySSE() {
+    if (_lobbySSE) { _lobbySSE.close(); _lobbySSE = null; }
+}
+
+function renderLobbyOnline(online) {
+    const list  = document.getElementById('lobby-online-list');
+    const count = document.getElementById('lobby-online-count');
+    if (!list) return;
+    count.textContent = online.length ? `(${online.length})` : '';
+    list.innerHTML = '';
+    online.forEach(u => {
+        const li = document.createElement('li');
+        const isSelf = u.username === currentUser.username;
+        li.className = 'lobby-online-user'
+            + (isSelf ? ' lobby-online-self' : '')
+            + (u.status === 'in-game' ? ' lobby-online-ingame' : '');
+        const tag = u.status === 'in-game' ? '<span class="lobby-online-tag">in game</span>' : '';
+        li.innerHTML = `<span class="lobby-online-name">${escHtml(u.username)}</span>${tag}`;
+        list.appendChild(li);
+    });
+}
+
+function renderOngoingGames(games) {
+    const wrap = document.getElementById('lobby-ongoing');
+    const list = document.getElementById('lobby-ongoing-list');
+    if (!list) return;
+    wrap.hidden = !(games && games.length);
+    list.innerHTML = '';
+    (games || []).forEach(g => {
+        const score   = g.score ? `${g.score.home}–${g.score.away}` : '0–0';
+        const turn    = g.turn ? `H${g.half} · T${g.turn}` : 'kickoff';
+        const card = document.createElement('div');
+        card.className = 'lobby-game-card';
+        card.innerHTML = `
+            <div class="lobby-game-teams">
+                <span class="lobby-game-side">${escHtml(g.home || '—')}</span>
+                <span class="lobby-game-score">${score}</span>
+                <span class="lobby-game-side lobby-game-away">${escHtml(g.away || '—')}</span>
+            </div>
+            <div class="lobby-game-foot">
+                <span class="lobby-game-turn">${turn}</span>
+                <button class="btn-ghost lobby-spectate-btn">Spectate</button>
+            </div>`;
+        card.querySelector('.lobby-spectate-btn').addEventListener('click', () => spectateGame(g.roomId));
+        list.appendChild(card);
+    });
+}
+
+// Phase 2 wires this to launch the webbb iframe in spectator mode.
+function spectateGame(roomId) {
+    console.log('spectate', roomId);
+}
+
+function appendLobbyMessage(username, text) {
+    const msgs = document.getElementById('lobby-messages');
+    if (!msgs) return;
+    const div = document.createElement('div');
+    div.className = 'room-message';
+    const isSelf = username === currentUser.username;
+    div.innerHTML = `<span class="room-msg-author${isSelf ? ' room-msg-self' : ''}">${escHtml(username)}</span>`
+        + `<span class="room-msg-text">${escHtml(text)}</span>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendLobbyChat() {
+    const input = document.getElementById('lobby-chat-text');
+    const text  = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    await api('POST', '/api/lobby/chat', { message: text });
+}
+
+document.getElementById('btn-lobby-send').addEventListener('click', sendLobbyChat);
+document.getElementById('lobby-chat-text').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); sendLobbyChat(); }
+});
 
 async function pollLobby() {
     const data = await api('GET', '/api/lobby');

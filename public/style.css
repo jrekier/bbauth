@@ -762,6 +762,147 @@ button[type="submit"]:hover,
     padding: 0.75rem 0;
 }
 
+/* ── Lobby layout: main column + side (presence / chat) ──────────── */
+.lobby-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.lobby-side {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.lobby-online {
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+    padding: 0.9rem 1rem;
+}
+
+.lobby-online h3,
+.lobby-chat h3 {
+    margin-bottom: 0.6rem;
+    font-size: 0.95rem;
+}
+
+.lobby-online-count {
+    color: var(--text-dim);
+    font-weight: 400;
+}
+
+.lobby-online-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.lobby-online-user {
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.lobby-online-user::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #3a8a3a;
+    flex-shrink: 0;
+}
+
+/* In-game players: amber dot instead of the green "available" dot. */
+.lobby-online-ingame::before { background: #c08a2a; }
+
+.lobby-online-name { flex: 1; }
+
+.lobby-online-tag {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #c08a2a;
+    border: 1px solid #c08a2a;
+    padding: 0.05rem 0.35rem;
+    border-radius: 2px;
+}
+
+.lobby-online-self {
+    color: var(--blood);
+    font-weight: 600;
+}
+
+/* ── Ongoing games ───────────────────────────────────────────────── */
+.lobby-ongoing {
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+    padding: 0.9rem 1rem;
+}
+
+.lobby-ongoing h3 { margin-bottom: 0.6rem; }
+
+.lobby-game-card {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.6rem;
+    margin-bottom: 0.5rem;
+}
+
+.lobby-game-card:last-child { margin-bottom: 0; }
+
+.lobby-game-teams {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+}
+
+.lobby-game-side { flex: 1; }
+.lobby-game-away { text-align: right; }
+
+.lobby-game-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+}
+
+.lobby-game-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.4rem;
+}
+
+.lobby-game-turn {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-dim);
+}
+
+.lobby-spectate-btn {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+}
+
+.lobby-chat {
+    background: var(--bg-d);
+    border: 1px solid var(--border);
+}
+
+.lobby-chat h3 {
+    padding: 0.9rem 1rem 0;
+}
+
+@media (max-width: 720px) {
+    .lobby-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Team footer ──────────────────────────────────────────────── */
 .team-footer {
     display: flex;
