@@ -145,6 +145,8 @@ let _lobbyPollTimer = null;
 
 function showLobby() {
     localStorage.removeItem('bbInGame');   // back at the lobby means we're not in a game
+    _spectating = false;
+    document.getElementById('btn-exit-game').textContent = 'Quit Game';
     document.getElementById('lobby-greeting').textContent = currentUser.username;
     showView('view-lobby');
     pollLobby();
@@ -233,14 +235,75 @@ function renderOngoingGames(games) {
                 <span class="lobby-game-turn">${turn}</span>
                 <button class="btn-ghost lobby-spectate-btn">Spectate</button>
             </div>`;
-        card.querySelector('.lobby-spectate-btn').addEventListener('click', () => spectateGame(g.roomId));
+        card.querySelector('.lobby-spectate-btn').addEventListener('click', () => spectateGame(g.roomId, g.origin));
         list.appendChild(card);
     });
 }
 
-// Phase 2 wires this to launch the webbb iframe in spectator mode.
-function spectateGame(roomId) {
-    console.log('spectate', roomId);
+// ── Spectating ─────────────────────────────────────────────────────
+let _spectating  = false;
+let _watchRoomId = null;   // room we're watching (set while watching/spectating)
+let _watchOrigin = null;   // webbb origin, learned on the room 'started' event
+
+// Spectate a game that's already live (from the Ongoing-games list): open the
+// room as a watcher and drop straight into the game iframe.
+function spectateGame(roomId, origin) {
+    _watchOrigin = origin;
+    enterWatchRoom(roomId);
+    enterSpectateGame(origin, roomId);
+}
+
+// Watch an open game from the lobby: join its room read-only — see the players,
+// teams and chat — and follow into the live game the moment it launches.
+function watchRoom(roomId) {
+    enterWatchRoom(roomId);
+}
+
+// Shared setup for both entry points: become a read-only member of the room.
+function enterWatchRoom(roomId) {
+    _spectating    = true;
+    _currentRoomId = roomId;   // enables chat send + the room SSE
+    _watchRoomId   = roomId;
+    document.getElementById('room-id-title').textContent = 'Watching';
+    showView('view-room');
+    document.getElementById('room-players').hidden = false;   // show the matchup
+    document.getElementById('room-actions').hidden = true;    // no ready/team-pick for watchers
+    document.getElementById('room-chat').hidden    = false;
+    document.getElementById('room-messages').innerHTML = '';
+    const iframe = document.getElementById('room-game-frame');
+    iframe.hidden = true;   // no game yet (becomes the board on 'started')
+    document.body.classList.remove('game-active');
+    connectRoomSSE(roomId);   // players/teams + chat + live room events (incl. 'started')
+}
+
+// Switch a watcher from the staging view into the live game board.
+function enterSpectateGame(origin, roomId) {
+    document.getElementById('room-id-title').textContent = 'Spectating';
+    document.getElementById('room-players').hidden = true;
+    const iframe = document.getElementById('room-game-frame');
+    iframe.src    = `${origin}/?spectate=${encodeURIComponent(roomId)}`;
+    iframe.hidden = false;
+    document.getElementById('room-sidebar-bar').hidden = false;
+    document.getElementById('btn-exit-game').textContent = 'Stop watching';
+    const isTouch = navigator.maxTouchPoints > 0;
+    document.getElementById('btn-chat-toggle').style.display = isTouch ? 'block' : 'none';
+    document.body.classList.add('game-active');
+}
+
+function leaveSpectate() {
+    _spectating  = false;
+    _watchRoomId = null;
+    _watchOrigin = null;
+    if (_roomEventSource) { _roomEventSource.close(); _roomEventSource = null; }
+    _currentRoomId = null;
+    const iframe = document.getElementById('room-game-frame');
+    iframe.src    = 'about:blank';
+    iframe.hidden = true;
+    document.getElementById('room-players').hidden = false;   // restore for normal room use
+    document.getElementById('room-sidebar-bar').hidden = true;
+    document.getElementById('btn-exit-game').textContent = 'Quit Game';
+    document.body.classList.remove('game-active');
+    showLobby();
 }
 
 function appendLobbyMessage(username, text) {
@@ -300,9 +363,13 @@ function renderLobbyRooms(rooms) {
                     <span class="lobby-room-team">${room.home_username}</span>
                     <span class="lobby-room-meta">${teamLabel}</span>
                 </div>
-                <button class="btn-primary">Join →</button>
+                <div class="lobby-room-btns">
+                    <button class="btn-ghost lobby-watch-btn">Watch</button>
+                    <button class="btn-primary lobby-join-btn">Join →</button>
+                </div>
             </div>`;
-        card.querySelector('button').addEventListener('click', () => joinRoom(room.id));
+        card.querySelector('.lobby-join-btn').addEventListener('click', () => joinRoom(room.id));
+        card.querySelector('.lobby-watch-btn').addEventListener('click', () => watchRoom(room.id));
         list.appendChild(card);
     });
 }
@@ -796,6 +863,8 @@ let _roomEventSource = null;
 let _currentRoomId   = null;
 let _isHomeInRoom    = false;
 let _myTeamSet       = false;
+let _roomHome        = null;   // home/away usernames, for colour-coding chat
+let _roomAway        = null;   // (anyone who isn't one of these is a spectator)
 
 function showRoom(roomId) {
     _currentRoomId = roomId;
@@ -804,8 +873,8 @@ function showRoom(roomId) {
     document.getElementById('room-id-title').textContent = `Room ${roomId}`;
     document.getElementById('room-messages').innerHTML   = '';
     document.getElementById('room-chat-text').value      = '';
-    document.getElementById('room-chat-text').disabled   = true;
-    document.getElementById('btn-room-send').disabled    = true;
+    document.getElementById('room-chat-text').disabled   = false;   // chat is open from room creation
+    document.getElementById('btn-room-send').disabled    = false;
     document.getElementById('btn-room-ready').disabled   = true;
     document.getElementById('btn-room-ready').classList.remove('btn-ready-on');
     document.getElementById('room-ready-hint').textContent = '';
@@ -825,6 +894,7 @@ function connectRoomSSE(roomId) {
 
     es.addEventListener('joined', e => {
         const d = JSON.parse(e.data);
+        _roomAway = d.awayUsername || null;
         document.getElementById('room-away-username').textContent = d.awayUsername;
         document.getElementById('room-away-team').textContent     =
             d.awayTeamName ? `${d.awayTeamName} · ${d.awayRace}` : '';
@@ -847,8 +917,7 @@ function connectRoomSSE(roomId) {
         document.getElementById('room-away-logo').hidden          = true;
         document.getElementById('btn-pick-team-away').hidden      = true;
         document.getElementById('room-away-status').textContent   = '';
-        document.getElementById('room-chat-text').disabled        = true;
-        document.getElementById('btn-room-send').disabled         = true;
+        _roomAway = null;
         updateReadyState(false, false);
         refreshReadyButton();
         appendSystemMessage(`${d.username} left the room.`);
@@ -882,6 +951,14 @@ function connectRoomSSE(roomId) {
         enterPlayingState(url);
     });
 
+    // Game has begun — watchers (who don't receive the per-player 'launch')
+    // switch from the staging view to spectating the live board.
+    es.addEventListener('started', e => {
+        if (!_spectating) return;
+        const d = JSON.parse(e.data);
+        enterSpectateGame(d.origin, d.roomId);
+    });
+
     es.addEventListener('quit', e => {
         const d = JSON.parse(e.data);
         if (d.username === currentUser.username) return;
@@ -897,12 +974,15 @@ function connectRoomSSE(roomId) {
         es.close();
         _roomEventSource = null;
         _currentRoomId   = null;
+        tearDownGame();
         showLobby();
     });
 }
 
 function renderRoomInit(state) {
     _isHomeInRoom = state.homeUsername === currentUser.username;
+    _roomHome = state.homeUsername || null;
+    _roomAway = state.awayUsername || null;
 
     document.getElementById('room-home-username').textContent = state.homeUsername;
     document.getElementById('room-home-team').textContent =
@@ -918,16 +998,20 @@ function renderRoomInit(state) {
     document.getElementById('room-away-status').textContent =
         hasAway ? (state.awayReady ? 'Ready!' : 'Not ready') : '';
 
-    // Show "Pick Team" button for the current user's slot
-    const myTeamAlreadySet = _isHomeInRoom ? !!state.homeTeamName : !!state.awayTeamName;
-    _myTeamSet = myTeamAlreadySet;
-    const myBtnId  = _isHomeInRoom ? 'btn-pick-team-home' : 'btn-pick-team-away';
-    const myBtn    = document.getElementById(myBtnId);
-    myBtn.hidden   = false;
-    myBtn.textContent = myTeamAlreadySet ? 'Change Team' : 'Pick Team';
+    // Show "Pick Team" button for the current user's slot — players only, never
+    // for a spectator (who isn't in either seat).
+    if (!_spectating) {
+        const myTeamAlreadySet = _isHomeInRoom ? !!state.homeTeamName : !!state.awayTeamName;
+        _myTeamSet = myTeamAlreadySet;
+        const myBtnId  = _isHomeInRoom ? 'btn-pick-team-home' : 'btn-pick-team-away';
+        const myBtn    = document.getElementById(myBtnId);
+        myBtn.hidden   = false;
+        myBtn.textContent = myTeamAlreadySet ? 'Change Team' : 'Pick Team';
+    }
 
-    document.getElementById('room-chat-text').disabled = !hasAway;
-    document.getElementById('btn-room-send').disabled  = !hasAway;
+    // Chat is open from room creation for everyone in the room.
+    document.getElementById('room-chat-text').disabled = false;
+    document.getElementById('btn-room-send').disabled  = false;
     refreshReadyButton();
 
     state.messages.forEach(m => appendChatMessage(m.username, m.message));
@@ -1002,7 +1086,11 @@ function appendChatMessage(username, text) {
     const div  = document.createElement('div');
     div.className = 'room-message';
     const isSelf = username === currentUser.username;
-    div.innerHTML = `<span class="room-msg-author${isSelf ? ' room-msg-self' : ''}">${escHtml(username)}</span>`
+    // Colour-code by role so players and spectators are easy to tell apart.
+    const role = username === _roomHome ? 'room-msg-home'
+               : username === _roomAway ? 'room-msg-away'
+               : 'room-msg-spectator';
+    div.innerHTML = `<span class="room-msg-author ${role}${isSelf ? ' room-msg-me' : ''}">${escHtml(username)}</span>`
         + `<span class="room-msg-text">${escHtml(text)}</span>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
@@ -1090,6 +1178,7 @@ function tearDownGame() {
 }
 
 document.getElementById('btn-exit-game').addEventListener('click', async () => {
+    if (_spectating) { leaveSpectate(); return; }
     if (!confirm('Quit the game? Your opponent will be notified.')) return;
     if (_currentRoomId) await api('POST', `/api/room/${_currentRoomId}/quit`);
     if (_roomEventSource) { _roomEventSource.close(); _roomEventSource = null; }
@@ -1112,6 +1201,7 @@ document.getElementById('btn-chat-toggle').addEventListener('click', () => {
 
 // Leave room
 document.getElementById('btn-room-leave').addEventListener('click', async () => {
+    if (_spectating) { leaveSpectate(); return; }
     if (_roomEventSource) { _roomEventSource.close(); _roomEventSource = null; }
     if (_currentRoomId) {
         await api('DELETE', `/api/lobby/${_currentRoomId}`);

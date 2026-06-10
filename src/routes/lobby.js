@@ -103,9 +103,11 @@ function lobbyPresence() {
 }
 
 // Public view of the ongoing games for the lobby list.
+const WEBBB_ORIGIN = process.env.WEBBB_URL || 'http://localhost:3000';
+
 function lobbyGamesList() {
     return [...liveGames.values()].map(g => ({
-        roomId: g.roomId,
+        roomId: g.roomId, origin: WEBBB_ORIGIN,
         home: g.homeUsername, away: g.awayUsername,
         homeRace: g.homeRace, awayRace: g.awayRace,
         homeTeam: g.homeTeamName, awayTeam: g.awayTeamName,
@@ -342,10 +344,9 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
 router.post('/room/:id/message', requireAuth, (req, res) => {
     const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
     if (!room) return res.status(404).json({ error: 'Room not found' });
-    if (room.home_user_id !== req.session.userId && room.away_user_id !== req.session.userId)
-        return res.status(403).json({ error: 'Not in this room' });
-    if (!room.away_user_id)
-        return res.status(400).json({ error: 'Waiting for opponent' });
+    // Chat is open from the moment the room exists — to the creator waiting
+    // alone, the opponent, and any watchers. The client colour-codes
+    // home / away / spectator names.
 
     const text = (req.body.message || '').trim().slice(0, 280);
     if (!text) return res.status(400).json({ error: 'Message is empty' });
@@ -457,6 +458,9 @@ router.post('/room/:id/ready', requireAuth, (req, res) => {
                     if (!r.ok) throw new Error(`webbb returned ${r.status}`);
                     sendTo(req.params.id, updated.home_user_id, 'launch', { url: `${base}?token=${homeToken}&roomId=${req.params.id}` });
                     sendTo(req.params.id, updated.away_user_id, 'launch', { url: `${base}?token=${awayToken}&roomId=${req.params.id}` });
+                    // Tell any watchers (who don't get the per-player launch URL) that
+                    // the game has begun, so they can switch to spectating it.
+                    broadcast(req.params.id, 'started', { origin: base, roomId: req.params.id });
                     // Room and messages stay alive; cleanup happens when all SSE clients disconnect.
                 })
                 .catch(e => {

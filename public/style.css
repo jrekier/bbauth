@@ -737,6 +737,25 @@ button[type="submit"]:hover,
     gap: 1rem;
 }
 
+.lobby-room-btns {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    align-items: stretch;
+}
+
+/* Watch + Join sit as a matched pair: same size/shape, differing only by
+   emphasis (Join solid, Watch outline). Overrides .btn-primary's stray
+   margin-top / align-self so they line up. */
+.lobby-room-btns .btn-primary,
+.lobby-room-btns .btn-ghost {
+    margin: 0;
+    align-self: auto;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    padding: 0.5rem 1rem;
+}
+
 .lobby-room-info {
     display: flex;
     flex-direction: column;
@@ -1071,6 +1090,13 @@ button[type="submit"]:hover,
 .room-msg-author.room-msg-self {
     color: var(--blood);
 }
+
+/* Game-chat roles: home player, away player, and spectators each in their own
+   colour so they're easy to tell apart. `room-msg-me` just bolds your own name. */
+.room-msg-author.room-msg-home      { color: #3a6ea5; }
+.room-msg-author.room-msg-away      { color: #b03a2e; }
+.room-msg-author.room-msg-spectator { color: #8a7a5a; font-style: italic; }
+.room-msg-author.room-msg-me        { font-weight: 700; }
 
 .room-message-system {
     font-size: 0.72rem;
