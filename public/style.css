@@ -269,25 +269,62 @@ button[type="submit"]:hover,
 #team-name:focus { border-bottom-color: var(--text); }
 #team-name::placeholder { color: var(--border); }
 
-.budget-bar {
+.section-note {
+    font-size: 0.65rem;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-dim);
+    opacity: 0.8;
+}
+
+.extra-label--parked { opacity: 0.55; }
+
+.race-rules, .builder-special-rules {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+}
+
+.race-rule {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: help;
+}
+
+/* Carried on the roster, but the game does not act on it yet. */
+.race-rule--parked { opacity: 0.5; }
+
+.tv-bar {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
     font-size: 0.75rem;
     color: var(--text-dim);
 }
 
-.budget-track {
-    flex: 1;
-    height: 4px;
-    background: var(--border);
+.tv-caption {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 
-.budget-fill {
-    height: 100%;
-    background: var(--blood);
-    transition: width 0.2s;
+.tv-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
 }
+
+.tv-spent { margin-left: auto; }
 
 .builder-columns {
     display: grid;
@@ -331,16 +368,12 @@ button[type="submit"]:hover,
         gap: 1rem;
     }
 
-    .budget-bar {
+    .tv-bar {
         flex-wrap: wrap;
         gap: 0.4rem;
     }
 
-    .budget-track {
-        width: 100%;
-        flex-basis: 100%;
-        order: 3;
-    }
+    .tv-spent { margin-left: auto; }
 
     .team-card {
         flex-wrap: wrap;
@@ -513,12 +546,7 @@ button[type="submit"]:hover,
     transition: border-color 0.1s;
 }
 
-.pos-card:hover:not(.pos-card--disabled) { border-color: var(--text); }
-
-.pos-card--disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
+.pos-card:hover { border-color: var(--text); }
 
 .pos-card .pos-name { font-size: 0.85rem; font-weight: 600; }
 .pos-card .pos-cost { font-size: 0.75rem; color: var(--text-dim); }
@@ -1041,9 +1069,16 @@ button[type="submit"]:hover,
 .extra-count { min-width: 1.2rem; text-align: center; font-variant-numeric: tabular-nums; }
 .extra-toggle input { cursor: pointer; width: 18px; height: 18px; }
 
-/* Over-budget indicator */
-.budget-over       { color: var(--blood); }
-.budget-fill--over { background: var(--blood) !important; }
+/* Extras that cost gold but add nothing to Team Value */
+.extra-no-tv {
+    font-style: normal;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    opacity: 0.75;
+    margin-left: 0.4rem;
+}
 
 .room-player-team {
     font-size: 0.75rem;

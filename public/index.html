@@ -172,12 +172,11 @@
                     <img id="builder-race-logo" class="builder-race-logo" hidden alt="">
                     <input type="text" id="team-name" placeholder="Team name" maxlength="32">
                 </div>
-                <div class="budget-bar">
-                    <span id="budget-label">1,000,000 gp</span>
-                    <div class="budget-track">
-                        <div class="budget-fill" id="budget-fill"></div>
-                    </div>
-                    <span id="budget-remaining"></span>
+                <div id="builder-special-rules" class="builder-special-rules" hidden></div>
+                <div class="tv-bar">
+                    <span class="tv-caption">Team Value</span>
+                    <span id="tv-value" class="tv-value">0k</span>
+                    <span id="tv-spent" class="tv-spent"></span>
                 </div>
             </div>
 
@@ -195,6 +194,11 @@
             <div class="extras-section">
                 <h3>Team extras</h3>
                 <div id="extras-list"></div>
+            </div>
+
+            <div class="extras-section">
+                <h3>Inducements <span class="section-note">bought from the same budget · never count toward TV</span></h3>
+                <div id="inducements-list"></div>
             </div>
 
             <div class="builder-columns">

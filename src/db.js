@@ -85,5 +85,10 @@ const teamCols = db.prepare(`PRAGMA table_info(teams)`).all().map(c => c.name);
 if (!teamCols.includes('extras')) {
     db.exec(`ALTER TABLE teams ADD COLUMN extras TEXT`);
 }
+// Inducements are drafted with the team in Matched Play, so they live on the
+// team rather than being chosen per match.
+if (!teamCols.includes('inducements')) {
+    db.exec(`ALTER TABLE teams ADD COLUMN inducements TEXT`);
+}
 
 module.exports = db;

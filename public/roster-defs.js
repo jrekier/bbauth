@@ -36,11 +36,40 @@ const SKILLS = [
     'Defensive', 'Diving Tackle', 'Hatred (Troll)', 'Leader',
 ];
 
+// ── Team special rules ─────────────────────────────────────────────
+// Each team roster carries zero or more of these. `text` is the rulebook
+// wording; `implemented` says whether webbb actually acts on it, so an
+// unimplemented rule is visibly parked rather than quietly missing.
+// Spelling is canonical: webbb matches these strings exactly.
+const TEAM_SPECIAL_RULES = {
+    'Bribery and Corruption': {
+        text: 'Once per game, when a team with this special rule rolls a 1 to '
+            + 'Argue the Call, they may re-roll the D6. The team also has access '
+            + 'to cheaper Bribes as an inducement (0-6 at 50,000 gp).',
+        implemented: true,   // the Argue the Call half; cheap Bribes land with inducements
+    },
+    'Team Captain': {
+        text: 'One player is designated as Team Captain at roster creation, '
+            + 'gaining the Pro skill for free without increasing their value.',
+        implemented: false,
+    },
+    "Brawlin' Brutes": {
+        text: 'League play only: the team earns more SPP for causing casualties '
+            + 'and less for scoring touchdowns.',
+        implemented: false,  // SPP progression is tourplay's business, not ours
+    },
+};
+
+// Per-race rosters, at standard BB2025 hiring fees — Sevens does not change
+// what a player costs. `min`, `max` and each position's `limit` are reference
+// data only; nothing in the builder or the API enforces them (see STAFF_LIMITS
+// below for why). What is load-bearing is `cost`, which feeds Team Value.
+// The draft budget is not per-race in Sevens — see DRAFT_BUDGET.
 const ROSTER_DEFS = {
     humans: {
+        specialRules: ['Team Captain'],
         logo:   'assets/logos/Human_BB2025.svg',
         colour: [200, 30, 30],
-        budget: 1000000,
         min: 7,
         max: 11,
         positions: [
@@ -97,9 +126,9 @@ const ROSTER_DEFS = {
     },
 
     orcs: {
+        specialRules: ["Brawlin' Brutes", 'Team Captain'],
         logo:   'assets/logos/Orc_BB2025.svg',
         colour: [30, 80, 180],
-        budget: 1000000,
         min: 7,
         max: 11,
         positions: [
@@ -163,9 +192,9 @@ const ROSTER_DEFS = {
     },
 
     skaven: {
+        specialRules: [],
         logo:   'assets/logos/Skaven_BB2025.svg',
         colour: [180, 140, 60],
-        budget: 1000000,
         min: 7,
         max: 11,
         positions: [
@@ -213,9 +242,9 @@ const ROSTER_DEFS = {
     },
 
     dwarfs: {
+        specialRules: ["Brawlin' Brutes", 'Bribery and Corruption'],
         logo:   'assets/logos/Dwarf_BB2025.svg',
         colour: [60, 90, 140],
-        budget: 1000000,
         min: 7,
         max: 11,
         positions: [
@@ -268,9 +297,9 @@ const ROSTER_DEFS = {
     },
 
     imperialnobility: {
+        specialRules: [],
         logo:   'assets/logos/ImperialNobility_BB2025.svg',
         colour: [175, 35, 45],
-        budget: 1000000,
         min: 7,
         max: 11,
         positions: [
@@ -342,6 +371,7 @@ function expandTeam(dbTeam) {
             av:     posDef.av,
             skills: Array.isArray(slot.skills) ? [...slot.skills] : [...posDef.skills],
             sprite: slot.sprite || posDef.sprite,
+            cost:   posDef.cost,
         };
     }).filter(Boolean);
     // Colours / extras may arrive parsed (the builder passes camelCase objects)
@@ -353,16 +383,37 @@ function expandTeam(dbTeam) {
     };
     const homeColour = parseVal(dbTeam.homeColour) || parseVal(dbTeam.home_colour) || raceDef.colour;
     const awayColour = parseVal(dbTeam.awayColour) || parseVal(dbTeam.away_colour) || raceDef.colour;
-    const ex = parseVal(dbTeam.extras) || {};
+    const ex  = parseVal(dbTeam.extras)      || {};
+    const ind = parseVal(dbTeam.inducements) || {};
 
-    return {
-        name: dbTeam.name, race: dbTeam.race, homeColour, awayColour, players,
+    // Team resources as drafted, before inducements.
+    const res = {
         rerolls:          ex.rerolls          || 0,
-        bribes:           ex.bribes           || 0,
+        bribes:           0,                        // bribes are inducement-only
         cheerleaders:     ex.cheerleaders     || 0,
         assistantCoaches: ex.assistantCoaches || 0,
         fanFactor:        ex.fanFactor        || 0,
         apothecary:       !!ex.apothecary,
+    };
+
+    // Fold the wired inducements in. Each names the resource it tops up, so
+    // webbb receives one set of numbers and needs no inducement logic at all.
+    for (const i of INDUCEMENTS) {
+        const n = ind[i.key] || 0;
+        if (!n || !i.applies) continue;
+        if (i.applies === 'apothecary') res.apothecary = true;
+        else res[i.applies] += n;
+    }
+
+    return {
+        name: dbTeam.name, race: dbTeam.race, homeColour, awayColour, players,
+        // Team Value travels with the team so webbb never needs a price list of
+        // its own. Inducements are excluded from it by rule.
+        tv:               teamValue(dbTeam.race, dbTeam.roster, ex),
+        specialRules:     [...(raceDef.specialRules || [])],
+        // What was bought, kept for display; the effect is already in `res`.
+        inducements:      { ...ind },
+        ...res,
     };
 }
 
@@ -376,45 +427,153 @@ function rosterCost(race, roster) {
     }, 0);
 }
 
-// ── Team extras (re-rolls, staff, inducements) ─────────────────────
-// Buyable from the team budget at creation. Re-roll price is per race; the rest
-// are flat. Counts are capped by STAFF_LIMITS.
+// ── Team creation prices ───────────────────────────────────────────
+// Blood Bowl SEVENS, 2025 edition. Single source of truth for what everything
+// costs. Team Value is derived from these, and TV is what inducements and
+// petty cash are worked out from, so a wrong price here quietly skews every
+// match-up.
+//
+// Player hiring fees and positional limits live on ROSTER_DEFS above and are
+// the standard BB2025 roster values — Sevens does not change them.
 
-const REROLL_COST = {
-    humans: 50000, orcs: 60000, skaven: 50000, dwarfs: 50000, imperialnobility: 70000,
-};
-const DEFAULT_REROLL_COST = 50000;
+// The Sevens draft budget. Reference only (nothing enforces it), but it is the
+// number a coach is working to: "you have a budget of 600,000 gold pieces to
+// spend on players, Sideline Staff, team re-rolls and so forth."
+const DRAFT_BUDGET = 600000;
+
+// Sevens re-rolls are a flat 100,000 gold pieces for EVERY team, regardless of
+// what that team pays at 11-a-side ("Re-rolls are more expensive - a cost of
+// 100,000 gold pieces each for every team"). A Sevens team may buy 0-6 at
+// drafting and, unlike an ordinary team, can never buy more later.
+// `race` is ignored today, but the parameter stays so call sites survive a
+// ruleset that goes back to per-team pricing.
+const REROLL_COST = 100000;
+
+function rerollCost(_race) {
+    return REROLL_COST;
+}
 
 const STAFF_COSTS = {
-    bribe:          100000,
-    cheerleader:     10000,
-    assistantCoach:  10000,
-    dedicatedFan:    10000,   // a.k.a. fan factor
-    apothecary:      50000,
+    cheerleader:     20000,
+    assistantCoach:  20000,
+    dedicatedFan:    20000,   // a.k.a. fan factor — price per step
+    apothecary:      80000,
 };
 
+// Rulebook quantities. Reference data: nothing here enforces them, because this
+// app stands in for a tabletop game among friends and what a team fields is the
+// coaches' business. League/tournament enforcement is tourplay's job.
+// Note fanFactor starts at 1 — every team has at least one dedicated fan.
 const STAFF_LIMITS = {
-    rerolls: 8, bribes: 3, cheerleaders: 12, assistantCoaches: 6, fanFactor: 6, apothecary: 1,
+    rerolls: 6, cheerleaders: 3, assistantCoaches: 3,
+    fanFactor: 5, fanFactorMin: 1, apothecary: 1,
 };
 
-function rerollCost(race) {
-    return REROLL_COST[race] || DEFAULT_REROLL_COST;
-}
+// Which purchases count toward Team Value. Per the rulebook, TV is the current
+// value of all players plus Sideline Staff plus Team Re-rolls; Dedicated Fans
+// and Treasury gold are excluded.
+const TV_EXTRAS = {
+    rerolls: true, apothecary: true, cheerleaders: true, assistantCoaches: true,
+    fanFactor: false,
+};
 
-// Gold cost of a team's extras {rerolls, bribes, cheerleaders, assistantCoaches, fanFactor, apothecary}.
-function extrasCost(race, extras) {
+// Gold cost of a team's extras {rerolls, cheerleaders, assistantCoaches,
+// fanFactor, apothecary}. With `tvOnly`, counts only the extras in TV_EXTRAS.
+function extrasCost(race, extras, tvOnly) {
     if (!extras) return 0;
-    return (extras.rerolls          || 0) * rerollCost(race)
-         + (extras.bribes           || 0) * STAFF_COSTS.bribe
-         + (extras.cheerleaders     || 0) * STAFF_COSTS.cheerleader
-         + (extras.assistantCoaches || 0) * STAFF_COSTS.assistantCoach
-         + (extras.fanFactor        || 0) * STAFF_COSTS.dedicatedFan
-         + (extras.apothecary ? STAFF_COSTS.apothecary : 0);
+    const counts = key => !tvOnly || TV_EXTRAS[key];
+    let total = 0;
+    if (counts('rerolls'))          total += (extras.rerolls          || 0) * rerollCost(race);
+    if (counts('cheerleaders'))     total += (extras.cheerleaders     || 0) * STAFF_COSTS.cheerleader;
+    if (counts('assistantCoaches')) total += (extras.assistantCoaches || 0) * STAFF_COSTS.assistantCoach;
+    if (counts('fanFactor'))        total += (extras.fanFactor        || 0) * STAFF_COSTS.dedicatedFan;
+    if (counts('apothecary') && extras.apothecary) total += STAFF_COSTS.apothecary;
+    return total;
 }
 
-// Total gold cost of a team: players + extras.
-function teamCost(race, roster, extras) {
-    return rosterCost(race, roster) + extrasCost(race, extras);
+// Gold actually spent building the team: every player, every extra, and — in
+// Matched Play — every inducement, since they all come out of one budget.
+function teamCost(race, roster, extras, inducements) {
+    return rosterCost(race, roster)
+         + extrasCost(race, extras, false)
+         + inducementsCost(race, inducements);
+}
+
+// Team Value — players plus the TV-counting extras. Deliberately not the same
+// number as teamCost: what a team is worth is not what its coach paid, and
+// inducements never count toward TV at all.
+function teamValue(race, roster, extras) {
+    return rosterCost(race, roster) + extrasCost(race, extras, true);
+}
+
+// TV is quoted in thousands: 1150000 → "1,150k".
+function formatTV(tv) {
+    return `${Math.round((tv || 0) / 1000).toLocaleString()}k`;
+}
+
+// ── Inducements ────────────────────────────────────────────────────
+// Blood Bowl Sevens has its own, shorter inducement list at its own prices —
+// the standard Blood Bowl table does NOT apply here.
+//
+// This app plays Matched Play, where there is no petty cash: inducements come
+// out of the same 600,000 draft budget as players and staff, and unspent gold
+// is simply lost. (League Play's petty cash sequence needs a Treasury, which
+// this app deliberately does not model — that is tourplay's business.)
+//
+// Inducements never count toward Team Value, in any mode.
+//
+// `applies` names the team resource webbb already tracks, so a wired inducement
+// folds into the game state with no inducement logic needed on that end.
+// `implemented: false` means we carry and price it, but the game does not act
+// on it yet — the builder shows those dimmed rather than pretending.
+const INDUCEMENTS = [
+    { key: 'prayersToNuffle',       label: 'Prayers to Nuffle',           cost:   5000, max: 2, implemented: false },
+    { key: 'tempCheerleaders',      label: 'Temp Agency Cheerleaders',    cost:  15000, max: 2, implemented: true,  applies: 'cheerleaders' },
+    { key: 'partTimeCoaches',       label: 'Part-Time Assistant Coaches', cost:  15000, max: 2, implemented: true,  applies: 'assistantCoaches' },
+    { key: 'kegs',                  label: "Blitzer's Best Kegs",         cost:  50000, max: 2, implemented: false },
+    { key: 'desperateMeasures',     label: 'Desperate Measures',          cost:  50000, max: 5, implemented: false },
+    { key: 'bribes',                label: 'Bribes',                      cost: 100000, max: 2, implemented: true,  applies: 'bribes',
+      discountRule: 'Bribery and Corruption', discountCost: 50000 },
+    { key: 'wanderingApothecaries', label: 'Wandering Apothecaries',      cost: 100000, max: 1, implemented: true,  applies: 'apothecary',
+      requiresApothecary: true },
+    { key: 'mortuaryAssistant',     label: 'Mortuary Assistant',          cost: 100000, max: 1, implemented: false, requiresRule: 'Masters of Undeath' },
+    { key: 'plagueDoctor',          label: 'Plague Doctor',               cost: 100000, max: 1, implemented: false, requiresRule: 'Favoured of Nurgle' },
+    { key: 'extraTeamTraining',     label: 'Extra Team Training',         cost: 125000, max: 6, implemented: true,  applies: 'rerolls' },
+    { key: 'masterChef',            label: 'Halfling Master Chef',        cost: 300000, max: 1, implemented: false },
+];
+
+// Some rosters may not hire an apothecary. None of ours opt out yet; a future
+// roster does so with `apothecary: false`.
+function canHireApothecary(race) {
+    const def = ROSTER_DEFS[race];
+    return !def || def.apothecary !== false;
+}
+
+// Is this inducement on the menu for the given race?
+function inducementAvailable(race, ind) {
+    const rules = (ROSTER_DEFS[race] && ROSTER_DEFS[race].specialRules) || [];
+    if (ind.requiresRule && !rules.includes(ind.requiresRule)) return false;
+    if (ind.requiresApothecary && !canHireApothecary(race)) return false;
+    return true;
+}
+
+function availableInducements(race) {
+    return INDUCEMENTS.filter(ind => inducementAvailable(race, ind));
+}
+
+// Price for this race — a team special rule may discount it (Bribery and
+// Corruption buys Bribes at half price).
+function inducementCost(race, ind) {
+    const rules = (ROSTER_DEFS[race] && ROSTER_DEFS[race].specialRules) || [];
+    if (ind.discountRule && rules.includes(ind.discountRule)) return ind.discountCost;
+    return ind.cost;
+}
+
+// Total gold spent on inducements {key: count}.
+function inducementsCost(race, inducements) {
+    if (!inducements) return 0;
+    return INDUCEMENTS.reduce((sum, ind) =>
+        sum + (inducements[ind.key] || 0) * inducementCost(race, ind), 0);
 }
 
 const PLAYER_NAMES = {
@@ -464,5 +623,8 @@ function randomPlayerName(race, pos) {
 
 if (typeof module !== 'undefined') {
     module.exports = { ROSTER_DEFS, SKILLS, COLOURS, PLAYER_NAMES, expandTeam, rosterCost,
-        STAFF_COSTS, STAFF_LIMITS, rerollCost, extrasCost, teamCost, randomPlayerName };
+        STAFF_COSTS, STAFF_LIMITS, TV_EXTRAS, DRAFT_BUDGET, TEAM_SPECIAL_RULES,
+        INDUCEMENTS, availableInducements, inducementCost, inducementsCost,
+        canHireApothecary, rerollCost, extrasCost,
+        teamCost, teamValue, formatTV, randomPlayerName };
 }

@@ -8,18 +8,24 @@ let editingTeamId    = null;   // null = new team, number = editing existing
 let selectedHomeCol  = null;   // [r,g,b]
 let selectedAwayCol  = null;   // [r,g,b]
 let extras           = defaultExtras();
+let inducements      = {};
 
+// Every team starts with one Dedicated Fan — that is the rulebook floor, not a
+// purchase. Bribes are absent on purpose: they are an inducement, bought per
+// match, not at drafting.
 function defaultExtras() {
-    return { rerolls: 0, bribes: 0, cheerleaders: 0, assistantCoaches: 0, fanFactor: 0, apothecary: false };
+    return { rerolls: 0, cheerleaders: 0, assistantCoaches: 0,
+             fanFactor: STAFF_LIMITS.fanFactorMin, apothecary: false };
 }
 
-// Buyable extras shown in the builder. cost() is read live (re-roll price is per race).
+// Buyable extras shown in the builder. cost() is read live (re-roll price is
+// per race). tv:false marks the ones that are paid for but do not count toward
+// Team Value, so the builder can say so rather than leave a coach guessing.
 const EXTRAS_META = [
-    { key: 'rerolls',          label: 'Team re-rolls',     cost: () => rerollCost(selectedRace),  max: () => STAFF_LIMITS.rerolls },
-    { key: 'bribes',           label: 'Bribes',            cost: () => STAFF_COSTS.bribe,         max: () => STAFF_LIMITS.bribes },
-    { key: 'cheerleaders',     label: 'Cheerleaders',      cost: () => STAFF_COSTS.cheerleader,   max: () => STAFF_LIMITS.cheerleaders },
-    { key: 'assistantCoaches', label: 'Assistant coaches', cost: () => STAFF_COSTS.assistantCoach,max: () => STAFF_LIMITS.assistantCoaches },
-    { key: 'fanFactor',        label: 'Dedicated fans',    cost: () => STAFF_COSTS.dedicatedFan,  max: () => STAFF_LIMITS.fanFactor },
+    { key: 'rerolls',          label: 'Team re-rolls',     cost: () => rerollCost(selectedRace),   tv: true  },
+    { key: 'cheerleaders',     label: 'Cheerleaders',      cost: () => STAFF_COSTS.cheerleader,    tv: true  },
+    { key: 'assistantCoaches', label: 'Assistant coaches', cost: () => STAFF_COSTS.assistantCoach, tv: true  },
+    { key: 'fanFactor',        label: 'Dedicated fans',    cost: () => STAFF_COSTS.dedicatedFan,   tv: false },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -587,7 +593,7 @@ function renderTeamsList(teams) {
             ${logoUrl ? `<img class="race-logo" src="${logoUrl}" alt="${team.race}">` : ''}
             <div class="team-card-info">
                 <span class="team-card-name">${team.name}</span>
-                <span class="team-card-meta">${team.race} · ${team.roster.length} players</span>
+                <span class="team-card-meta">${team.race} · ${team.roster.length} players · TV ${formatTV(teamValue(team.race, team.roster, team.extras))}</span>
             </div>
             <div class="team-card-sprites" id="team-card-sprites-${team.id}"></div>
             <div class="team-card-actions">
@@ -645,21 +651,25 @@ function showBuilder(existingTeam) {
         selectedHomeCol = existingTeam.homeColour || null;
         selectedAwayCol = existingTeam.awayColour || null;
         extras          = { ...defaultExtras(), ...(existingTeam.extras || {}) };
+        inducements     = { ...(existingTeam.inducements || {}) };
         document.getElementById('team-name').value        = existingTeam.name;
         document.getElementById('step-race').hidden       = true;
         document.getElementById('step-roster').hidden     = false;
         setBuilderRaceLogo(selectedRace);
+    renderSpecialRules(selectedRace);
         renderRoster();
         renderPositions();
         renderColourPickers();
         renderExtras();
-        updateBudget();
+    renderInducements();
+        updateTeamValue();
     } else {
         selectedRace    = null;
         roster          = [];
         selectedHomeCol = null;
         selectedAwayCol = null;
         extras          = defaultExtras();
+        inducements     = {};
         document.getElementById('step-race').hidden       = false;
         document.getElementById('step-roster').hidden     = true;
         renderRaceCards();
@@ -675,6 +685,21 @@ function setBuilderRaceLogo(race) {
     else     { img.hidden = true; }
 }
 
+// The team's special rules, as chips under the team name. Rules the game does
+// not act on yet are dimmed, so nobody counts on one that is only data.
+function renderSpecialRules(race) {
+    const el = document.getElementById('builder-special-rules');
+    if (!el) return;
+    const rules = (ROSTER_DEFS[race] && ROSTER_DEFS[race].specialRules) || [];
+    el.innerHTML = rules.map(r => {
+        const def = TEAM_SPECIAL_RULES[r];
+        const parked = !(def && def.implemented);
+        return `<span class="race-rule${parked ? ' race-rule--parked' : ''}"
+                      title="${def ? def.text.replace(/"/g, '&quot;') : ''}">${r}${parked ? ' *' : ''}</span>`;
+    }).join('');
+    el.hidden = rules.length === 0;
+}
+
 document.getElementById('btn-builder-back').addEventListener('click', () => showTeams());
 
 function renderRaceCards() {
@@ -688,10 +713,12 @@ function renderRaceCards() {
             ${logoUrl ? `<img class="race-card-logo" src="${logoUrl}" alt="">` : ''}
             <h2>${race}</h2>
             <div class="race-meta">
-                Budget: ${def.budget.toLocaleString()} gp<br>
-                ${def.min}–${def.max} players<br>
                 ${def.positions.map(p => p.pos).join(', ')}
-            </div>`;
+            </div>
+            ${def.specialRules.length ? `<div class="race-rules">${def.specialRules.map(r =>
+                `<span class="race-rule${TEAM_SPECIAL_RULES[r] && TEAM_SPECIAL_RULES[r].implemented ? '' : ' race-rule--parked'}"
+                       title="${TEAM_SPECIAL_RULES[r] ? TEAM_SPECIAL_RULES[r].text.replace(/"/g, '&quot;') : ''}">${r}</span>`
+            ).join('')}</div>` : ''}`;
         card.addEventListener('click', () => selectRace(race));
         container.appendChild(card);
     }
@@ -703,15 +730,18 @@ function selectRace(race) {
     selectedHomeCol = null;
     selectedAwayCol = null;
     extras          = defaultExtras();
+    inducements     = {};
     document.getElementById('team-name').value    = '';
     document.getElementById('step-race').hidden   = true;
     document.getElementById('step-roster').hidden = false;
     setBuilderRaceLogo(race);
+    renderSpecialRules(race);
     renderRoster();
     renderPositions();
     renderColourPickers();
     renderExtras();
-    updateBudget();
+    renderInducements();
+    updateTeamValue();
 }
 
 // ── Skill picker ───────────────────────────────────────────────────
@@ -798,7 +828,7 @@ function renderRoster() {
             roster.splice(i, 1);
             renderRoster();
             renderPositions();
-            updateBudget();
+            updateTeamValue();
         });
         li.querySelector('.btn-add-skill').addEventListener('click', e => {
             e.stopPropagation();
@@ -807,12 +837,9 @@ function renderRoster() {
         list.appendChild(li);
     });
 
-    const count = document.getElementById('roster-count');
-    const hint  = document.getElementById('roster-hint');
-    count.textContent = `(${roster.length}/${def.max})`;
-    hint.textContent  = roster.length < def.min
-        ? `Need at least ${def.min - roster.length} more player${def.min - roster.length > 1 ? 's' : ''}`
-        : '';
+    document.getElementById('roster-count').textContent =
+        `(${roster.length} player${roster.length === 1 ? '' : 's'})`;
+    document.getElementById('roster-hint').textContent = '';
 }
 
 function renderPositions() {
@@ -821,35 +848,31 @@ function renderPositions() {
     container.innerHTML = '';
 
     def.positions.forEach(pos => {
-        const used      = roster.filter(s => s.pos === pos.pos).length;
-        const spent     = teamCost(selectedRace, roster, extras);
-        const disabled  = used >= pos.limit || roster.length >= def.max || spent + pos.cost > def.budget;
+        const used = roster.filter(s => s.pos === pos.pos).length;
 
         const card = document.createElement('div');
-        card.className = 'pos-card' + (disabled ? ' pos-card--disabled' : '');
+        card.className = 'pos-card';
         card.innerHTML = `
             <canvas class="sprite-preview" width="32" height="32"></canvas>
             <span class="pos-name">${pos.pos}</span>
-            <span class="pos-cost">${pos.cost.toLocaleString()} gp · ${used}/${pos.limit}</span>`;
+            <span class="pos-cost">${pos.cost.toLocaleString()} gp${used ? ` · ${used} hired` : ''}</span>`;
         const previewSprite = pos.sprite || (pos.sprites && pos.sprites[0]);
         if (previewSprite && typeof drawSpritePreview === 'function') {
             drawSpritePreview(card.querySelector('canvas'), previewSprite, selectedHomeCol || def.colour);
         }
-        if (!disabled) {
-            card.addEventListener('click', () => {
-                const sprite = pos.sprites
-                    ? pos.sprites[Math.floor(Math.random() * pos.sprites.length)]
-                    : undefined;
-                const slot = { pos: pos.pos, name: randomPlayerName(selectedRace, pos.pos), skills: [...pos.skills] };
-                if (sprite) slot.sprite = sprite;
-                roster.push(slot);
-                renderRoster();
-                renderPositions();
-                updateBudget();
-                const items = document.querySelectorAll('#roster-list .roster-item');
-                if (items.length) items[items.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-        }
+        card.addEventListener('click', () => {
+            const sprite = pos.sprites
+                ? pos.sprites[Math.floor(Math.random() * pos.sprites.length)]
+                : undefined;
+            const slot = { pos: pos.pos, name: randomPlayerName(selectedRace, pos.pos), skills: [...pos.skills] };
+            if (sprite) slot.sprite = sprite;
+            roster.push(slot);
+            renderRoster();
+            renderPositions();
+            updateTeamValue();
+            const items = document.querySelectorAll('#roster-list .roster-item');
+            if (items.length) items[items.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
         container.appendChild(card);
     });
 }
@@ -896,18 +919,15 @@ function arrEq(a, b) {
     return a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
-function updateBudget() {
-    const def    = ROSTER_DEFS[selectedRace];
-    const spent  = teamCost(selectedRace, roster, extras);
-    const remain = def.budget - spent;
-    const pct    = Math.min(100, (spent / def.budget) * 100);
-    document.getElementById('budget-label').textContent     = `${spent.toLocaleString()} gp spent`;
-    const remEl = document.getElementById('budget-remaining');
-    remEl.textContent = `${remain.toLocaleString()} remaining`;
-    remEl.classList.toggle('budget-over', remain < 0);
-    const fill = document.getElementById('budget-fill');
-    fill.style.width = `${pct}%`;
-    fill.classList.toggle('budget-fill--over', remain < 0);
+// There is no budget to spend down — TV is the headline number, because that
+// is what inducements and petty cash are worked out from once the match starts.
+// Gold spent is shown alongside it, since the two differ (dedicated fans cost
+// gold but add no TV).
+function updateTeamValue() {
+    const tv    = teamValue(selectedRace, roster, extras);
+    const spent = teamCost(selectedRace, roster, extras, inducements);
+    document.getElementById('tv-value').textContent = formatTV(tv);
+    document.getElementById('tv-spent').textContent = `${spent.toLocaleString()} gp spent`;
 }
 
 // ── Team extras (re-rolls, staff) ──────────────────────────────────
@@ -915,24 +935,22 @@ function renderExtras() {
     const list = document.getElementById('extras-list');
     if (!list) return;
     list.innerHTML = '';
-    const remaining = ROSTER_DEFS[selectedRace].budget - teamCost(selectedRace, roster, extras);
 
     EXTRAS_META.forEach(meta => {
         const count = extras[meta.key] || 0;
         const cost  = meta.cost();
-        const atMax = count >= meta.max();
         const row = document.createElement('div');
         row.className = 'extra-row';
         row.innerHTML = `
-            <span class="extra-label">${meta.label}</span>
+            <span class="extra-label">${meta.label}${meta.tv ? '' : ' <em class="extra-no-tv">no TV</em>'}</span>
             <span class="extra-cost">${cost.toLocaleString()} gp</span>
             <span class="extra-stepper">
                 <button type="button" class="extra-minus" ${count <= 0 ? 'disabled' : ''}>−</button>
                 <span class="extra-count">${count}</span>
-                <button type="button" class="extra-plus" ${atMax || cost > remaining ? 'disabled' : ''}>+</button>
+                <button type="button" class="extra-plus">+</button>
             </span>`;
-        row.querySelector('.extra-minus').addEventListener('click', () => { extras[meta.key] = count - 1; renderExtras(); updateBudget(); renderPositions(); });
-        row.querySelector('.extra-plus').addEventListener('click',  () => { extras[meta.key] = count + 1; renderExtras(); updateBudget(); renderPositions(); });
+        row.querySelector('.extra-minus').addEventListener('click', () => { extras[meta.key] = count - 1; renderExtras(); updateTeamValue(); });
+        row.querySelector('.extra-plus').addEventListener('click',  () => { extras[meta.key] = count + 1; renderExtras(); updateTeamValue(); });
         list.appendChild(row);
     });
 
@@ -944,13 +962,49 @@ function renderExtras() {
         <span class="extra-label">Apothecary</span>
         <span class="extra-cost">${apCost.toLocaleString()} gp</span>
         <label class="extra-toggle">
-            <input type="checkbox" id="extra-apothecary" ${extras.apothecary ? 'checked' : ''}
-                ${!extras.apothecary && apCost > remaining ? 'disabled' : ''}>
+            <input type="checkbox" id="extra-apothecary" ${extras.apothecary ? 'checked' : ''}>
         </label>`;
     apRow.querySelector('#extra-apothecary').addEventListener('change', e => {
-        extras.apothecary = e.target.checked; renderExtras(); updateBudget(); renderPositions();
+        extras.apothecary = e.target.checked; renderExtras(); updateTeamValue();
     });
     list.appendChild(apRow);
+}
+
+// ── Inducements ────────────────────────────────────────────────────
+// Matched Play buys these at drafting, out of the same budget. They never add
+// to TV, so the whole section is labelled that way rather than tagging rows.
+function renderInducements() {
+    const list = document.getElementById('inducements-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    availableInducements(selectedRace).forEach(ind => {
+        const count = inducements[ind.key] || 0;
+        const cost  = inducementCost(selectedRace, ind);
+        const cut   = cost < ind.cost;   // a special rule discounted it
+        const row = document.createElement('div');
+        row.className = 'extra-row';
+        row.innerHTML = `
+            <span class="extra-label${ind.implemented ? '' : ' extra-label--parked'}">${ind.label}${
+                ind.implemented ? '' : ' <em class="extra-no-tv">not in play yet</em>'}</span>
+            <span class="extra-cost">${cost.toLocaleString()} gp${
+                cut ? ` <em class="extra-no-tv" title="${ind.discountRule}">−</em>` : ''}</span>
+            <span class="extra-stepper">
+                <button type="button" class="extra-minus" ${count <= 0 ? 'disabled' : ''}>−</button>
+                <span class="extra-count">${count}</span>
+                <button type="button" class="extra-plus">+</button>
+            </span>`;
+        row.querySelector('.extra-minus').addEventListener('click', () => {
+            inducements[ind.key] = count - 1;
+            if (inducements[ind.key] <= 0) delete inducements[ind.key];
+            renderInducements(); updateTeamValue();
+        });
+        row.querySelector('.extra-plus').addEventListener('click', () => {
+            inducements[ind.key] = count + 1;
+            renderInducements(); updateTeamValue();
+        });
+        list.appendChild(row);
+    });
 }
 
 // ── Save team ──────────────────────────────────────────────────────
@@ -963,14 +1017,12 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
     if (!selectedHomeCol) return (err.textContent = 'Pick a home colour');
     if (!selectedAwayCol) return (err.textContent = 'Pick an away colour');
 
-    const def = ROSTER_DEFS[selectedRace];
-    if (roster.length < def.min) return (err.textContent = `Need at least ${def.min} players`);
     if (roster.some(s => !s.name.trim())) return (err.textContent = 'All players need a name');
 
     const method = editingTeamId ? 'PUT' : 'POST';
     const path   = editingTeamId ? `/api/teams/${editingTeamId}` : '/api/teams';
     const data   = await api(method, path, {
-        name, race: selectedRace, roster, extras,
+        name, race: selectedRace, roster, extras, inducements,
         homeColour: selectedHomeCol,
         awayColour: selectedAwayCol,
     });
