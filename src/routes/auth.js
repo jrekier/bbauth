@@ -1,8 +1,17 @@
 const express = require('express');
 const bcrypt  = require('bcryptjs');
 const db      = require('../db');
+const { profile, getUser } = require('./account');
 
 const router = express.Router();
+
+// Store the identity needed for presence on the session.
+function startSession(req, user) {
+    req.session.userId      = user.id;
+    req.session.username    = user.username;
+    req.session.displayName = user.display_name || user.username;
+    req.session.avatarUrl   = user.avatar_url || null;
+}
 
 // POST /api/register
 router.post('/register', async (req, res) => {
@@ -20,13 +29,13 @@ router.post('/register', async (req, res) => {
         return res.status(409).json({ error: 'Username already taken' });
 
     const hash = await bcrypt.hash(password, 12);
-    const { lastInsertRowid } = db.prepare(
-        'INSERT INTO users (username, password_hash) VALUES (?, ?)'
-    ).run(username, hash);
+    db.prepare(
+        'INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)'
+    ).run(username, hash, username);
 
-    req.session.userId   = Number(lastInsertRowid);
-    req.session.username = username;
-    res.json({ ok: true, userId: Number(lastInsertRowid), username });
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    startSession(req, user);
+    res.json(profile(user));
 });
 
 // POST /api/login
@@ -40,13 +49,14 @@ router.post('/login', async (req, res) => {
     if (!user)
         return res.status(401).json({ error: 'Invalid credentials' });
 
+    if (!user.password_hash)
+        return res.status(401).json({ error: 'Invalid credentials' });
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match)
         return res.status(401).json({ error: 'Invalid credentials' });
 
-    req.session.userId   = user.id;
-    req.session.username = user.username;
-    res.json({ ok: true, userId: user.id, username: user.username });
+    startSession(req, user);
+    res.json(profile(user));
 });
 
 // POST /api/logout
@@ -57,11 +67,13 @@ router.post('/logout', (req, res) => {
     });
 });
 
-// GET /api/me  — lets the frontend check who is logged in
+// GET /api/me  — current user's full profile (or 401)
 router.get('/me', (req, res) => {
     if (!req.session.userId)
         return res.status(401).json({ error: 'Not authenticated' });
-    res.json({ userId: req.session.userId, username: req.session.username });
+    const user = getUser(req.session.userId);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    res.json(profile(user));
 });
 
 module.exports = router;

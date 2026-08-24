@@ -10,7 +10,16 @@
 // this against the Railway volume — it deletes all users, teams, and matches.
 
 require('dotenv').config();           // honour DB_PATH from .env, like the server
-const db     = require('./src/db');   // opens the DB and ensures the schema
+const path = require('path');
+const fs   = require('fs');
+
+// Truly wipe: delete the DB file *before* opening it, so it's recreated with the
+// current schema. (CREATE TABLE IF NOT EXISTS won't add new columns to an
+// existing table, so a plain row-delete would keep a stale schema.)
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'bbauth.db');
+for (const f of [DB_PATH, `${DB_PATH}-shm`, `${DB_PATH}-wal`]) { try { fs.rmSync(f); } catch {} }
+
+const db     = require('./src/db');   // opens a fresh DB with the current schema
 const bcrypt = require('bcryptjs');
 const { ROSTER_DEFS } = require('./public/roster-defs');
 
@@ -77,14 +86,14 @@ for (const table of ['lobby_messages', 'room_messages', 'matches', 'pending_room
 // Reset autoincrement counters so ids start at 1 again (best-effort).
 try { db.exec(`DELETE FROM sqlite_sequence`); } catch {}
 
-const insertUser = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
+const insertUser = db.prepare('INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)');
 const insertTeam = db.prepare(
     'INSERT INTO teams (user_id, name, race, roster, home_colour, away_colour, extras) VALUES (?, ?, ?, ?, ?, ?, ?)'
 );
 
 for (const acc of ACCOUNTS) {
     const hash = bcrypt.hashSync(PASSWORD, 12);
-    const { lastInsertRowid: userId } = insertUser.run(acc.username, hash);
+    const { lastInsertRowid: userId } = insertUser.run(acc.username, hash, acc.username);
     const t = acc.team;
     insertTeam.run(
         Number(userId), t.name, t.race,

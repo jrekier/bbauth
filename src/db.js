@@ -5,10 +5,15 @@ const db = new DatabaseSync(process.env.DB_PATH || path.join(__dirname, '..', 'b
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-        password_hash TEXT    NOT NULL,
-        created_at    INTEGER NOT NULL DEFAULT (unixepoch())
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        username       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash  TEXT,                       -- null for Google-only accounts
+        display_name   TEXT,
+        avatar_url     TEXT,
+        email          TEXT    UNIQUE COLLATE NOCASE,
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        google_sub     TEXT    UNIQUE,
+        created_at     INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
     CREATE TABLE IF NOT EXISTS teams (

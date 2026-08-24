@@ -828,18 +828,7 @@ button[type="submit"]:hover,
     gap: 0.45rem;
 }
 
-.lobby-online-user::before {
-    content: '';
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #3a8a3a;
-    flex-shrink: 0;
-}
-
-/* In-game players: amber dot instead of the green "available" dot. */
-.lobby-online-ingame::before { background: #c08a2a; }
-
+/* The avatar is the visual anchor now; the in-game state shows via the tag. */
 .lobby-online-name { flex: 1; }
 
 .lobby-online-tag {
@@ -1506,3 +1495,50 @@ body.game-active #room-messages {
     .mu-r-name { padding-top: 1.2rem; padding-bottom: 0.95rem; gap: 0.7rem; }
     .room-vs { font-size: 1.1rem; }
 }
+
+/* ── Avatar (monogram or Google picture) ──────────────────────────── */
+.avatar {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    display: inline-flex;
+    vertical-align: middle;
+}
+.avatar-mono {
+    align-items: center;
+    justify-content: center;
+    background: hsl(var(--mono, 0) 42% 40%);
+    color: #f0ead8;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+.avatar-lg { width: 64px; height: 64px; font-size: 1.9rem; }
+.avatar-sm { width: 18px; height: 18px; font-size: 0.55rem; }
+
+/* ── Account view ─────────────────────────────────────────────────── */
+.account-card { display: flex; flex-direction: column; gap: 0.6rem; }
+.account-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+.account-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.7rem;
+    letter-spacing: 0.04em;
+    line-height: 1;
+}
+.account-username { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
+.account-row { display: flex; gap: 0.5rem; align-items: center; }
+.account-row input { flex: 1; min-width: 0; }
+.account-row .btn-primary { margin-top: 0; align-self: auto; flex-shrink: 0; }
+.account-meta { font-size: 0.8rem; color: var(--text-dim); }
+#account-password-section {
+    margin-top: 0.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+#account-password-section h3 { margin-bottom: 0.25rem; }
+#account-password-section .btn-ghost { align-self: flex-start; }

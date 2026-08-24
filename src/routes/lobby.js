@@ -5,6 +5,7 @@ const db      = require('../db');
 const { requireAuth }  = require('../auth-middleware');
 const { expandTeam }   = require('../../public/roster-defs');
 const { sign }         = require('../sign');
+const { identity }     = require('./account');   // { username, displayName, avatarUrl } by userId
 
 const router = express.Router();
 
@@ -92,14 +93,28 @@ function gameForUser(userId) {
     return null;
 }
 
-// Presence = online users (SSE-connected), each tagged in-game or in-lobby.
+// Presence = online users (SSE-connected), each tagged in-game or in-lobby,
+// carrying their display name + avatar so the client shows identity, not handle.
 function lobbyPresence() {
     return [...lobbyClients.entries()]
         .map(([userId, c]) => {
             const g = gameForUser(userId);
-            return { username: c.username, status: g ? 'in-game' : 'lobby', roomId: g ? g.roomId : null };
+            return {
+                username: c.username, displayName: c.displayName, avatarUrl: c.avatar,
+                status: g ? 'in-game' : 'lobby', roomId: g ? g.roomId : null,
+            };
         })
-        .sort((a, b) => a.username.localeCompare(b.username));
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+// Re-read a member's identity (called after they change their display name) and
+// push the updated presence list to everyone.
+function refreshMemberIdentity(userId) {
+    const e = lobbyClients.get(userId);
+    if (!e) return;
+    const id = identity(userId);
+    if (id) { e.displayName = id.displayName; e.avatar = id.avatarUrl; }
+    broadcastPresence();
 }
 
 // Public view of the ongoing games for the lobby list.
@@ -108,7 +123,8 @@ const WEBBB_ORIGIN = process.env.WEBBB_URL || 'http://localhost:3000';
 function lobbyGamesList() {
     return [...liveGames.values()].map(g => ({
         roomId: g.roomId, origin: WEBBB_ORIGIN,
-        home: g.homeUsername, away: g.awayUsername,
+        home: g.homeDisplay || g.homeUsername, away: g.awayDisplay || g.awayUsername,
+        homeAvatar: g.homeAvatar || null, awayAvatar: g.awayAvatar || null,
         homeRace: g.homeRace, awayRace: g.awayRace,
         homeTeam: g.homeTeamName, awayTeam: g.awayTeamName,
         score: g.score, turn: g.turn, half: g.half, phase: g.phase,
@@ -125,10 +141,14 @@ function setLiveGame(roomId, partial) {
     if (!g) {
         const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(roomId);
         if (!room) return;   // result already processed / unknown room — ignore
+        const hi = identity(room.home_user_id) || {};
+        const ai = room.away_user_id ? (identity(room.away_user_id) || {}) : {};
         g = {
             roomId,
             homeUserId: room.home_user_id, awayUserId: room.away_user_id,
             homeUsername: room.home_username, awayUsername: room.away_username,
+            homeDisplay: hi.displayName || room.home_username, awayDisplay: ai.displayName || room.away_username,
+            homeAvatar: hi.avatarUrl || null, awayAvatar: ai.avatarUrl || null,
             homeRace: room.race, awayRace: room.away_race,
             homeTeamName: room.team_name, awayTeamName: room.away_team_name,
             score: { home: 0, away: 0 }, turn: null, half: null, active: null, phase: null,
@@ -153,15 +173,22 @@ router.get('/lobby/events', requireAuth, (req, res) => {
     res.setHeader('Connection',    'keep-alive');
     res.flushHeaders();
 
-    const { userId, username } = req.session;
+    const { userId, username, displayName, avatarUrl } = req.session;
     let entry = lobbyClients.get(userId);
     const firstConnection = !entry;
-    if (!entry) { entry = { username, conns: new Set() }; lobbyClients.set(userId, entry); }
+    if (!entry) {
+        entry = { username, displayName: displayName || username, avatar: avatarUrl || null, conns: new Set() };
+        lobbyClients.set(userId, entry);
+    }
     entry.conns.add(res);
 
-    // Opening snapshot: presence + ongoing games + recent chat backlog.
+    // Opening snapshot: presence + ongoing games + recent chat backlog (resolved
+    // to each sender's current display name + avatar).
     const messages = db.prepare(
-        'SELECT username, message FROM lobby_messages ORDER BY id DESC LIMIT 50'
+        `SELECT m.message, u.username,
+                COALESCE(u.display_name, u.username) AS displayName, u.avatar_url AS avatarUrl
+         FROM lobby_messages m JOIN users u ON u.id = m.user_id
+         ORDER BY m.id DESC LIMIT 50`
     ).all().reverse();
     sseWrite(res, 'init', { online: lobbyPresence(), games: lobbyGamesList(), messages });
 
@@ -192,7 +219,12 @@ router.post('/lobby/chat', requireAuth, (req, res) => {
     // Keep only the most recent ~200 messages.
     db.prepare('DELETE FROM lobby_messages WHERE id <= (SELECT MAX(id) - 200 FROM lobby_messages)').run();
 
-    lobbyBroadcast('chat', { username: req.session.username, message: text });
+    lobbyBroadcast('chat', {
+        username: req.session.username,
+        displayName: req.session.displayName || req.session.username,
+        avatarUrl: req.session.avatarUrl || null,
+        message: text,
+    });
     res.json({ ok: true });
 });
 
@@ -252,6 +284,8 @@ router.post('/lobby/:id/join', requireAuth, (req, res) => {
 
     broadcast(req.params.id, 'joined', {
         awayUsername: req.session.username,
+        awayDisplay:  req.session.displayName || req.session.username,
+        awayAvatar:   req.session.avatarUrl || null,
         awayTeamName: teamName,
         awayRace:     race,
     });
@@ -302,17 +336,27 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
     // Register this client
     getRoom(roomId).set(req.session.userId, res);
 
-    // Send current state as the first event
+    // Send current state as the first event (chat backlog resolved to each
+    // sender's current display name + avatar).
     const messages = db.prepare(
-        'SELECT username, message FROM room_messages WHERE room_id = ? ORDER BY created_at ASC'
+        `SELECT m.message, m.username,
+                COALESCE(u.display_name, m.username) AS displayName, u.avatar_url AS avatarUrl
+         FROM room_messages m LEFT JOIN users u ON u.username = m.username
+         WHERE m.room_id = ? ORDER BY m.created_at ASC`
     ).all(roomId);
 
+    const homeId = identity(room.home_user_id) || {};
+    const awayId = room.away_user_id ? (identity(room.away_user_id) || {}) : {};
     sseWrite(res, 'init', {
         roomId,
         homeUsername: room.home_username,
+        homeDisplay:  homeId.displayName || room.home_username,
+        homeAvatar:   homeId.avatarUrl || null,
         homeTeamName: room.team_name,
         homeRace:     room.race,
         awayUsername: room.away_username  || null,
+        awayDisplay:  room.away_user_id ? (awayId.displayName || room.away_username) : null,
+        awayAvatar:   awayId.avatarUrl || null,
         awayTeamName: room.away_team_name || null,
         awayRace:     room.away_race      || null,
         homeReady:    !!room.home_ready,
@@ -324,7 +368,7 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
     // Remember on the connection whether we announced them, so we only emit the
     // matching "stopped watching" — never for a player whose seat was vacated.
     res._announcedSpectator = req.session.userId !== room.home_user_id && req.session.userId !== room.away_user_id;
-    if (res._announcedSpectator) broadcast(roomId, 'spectator', { username: req.session.username, action: 'joined' });
+    if (res._announcedSpectator) broadcast(roomId, 'spectator', { username: req.session.username, displayName: req.session.displayName || req.session.username, action: 'joined' });
 
     // Keepalive ping every 25 s
     const ping = setInterval(() => res.write(': ping\n\n'), 25000);
@@ -337,7 +381,7 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
         // watcher socket closing) stays silent.
         const cur = db.prepare('SELECT home_user_id, away_user_id FROM pending_rooms WHERE id = ?').get(roomId);
         if (res._announcedSpectator && cur && req.session.userId !== cur.home_user_id && req.session.userId !== cur.away_user_id)
-            broadcast(roomId, 'spectator', { username: req.session.username, action: 'left' });
+            broadcast(roomId, 'spectator', { username: req.session.username, displayName: req.session.displayName || req.session.username, action: 'left' });
         if (getRoom(roomId).size === 0) {
             roomClients.delete(roomId);
             // Defer cleanup so brief reconnects don't wipe the room
@@ -384,7 +428,12 @@ router.post('/room/:id/message', requireAuth, (req, res) => {
     db.prepare('INSERT INTO room_messages (room_id, username, message) VALUES (?, ?, ?)')
         .run(req.params.id, req.session.username, text);
 
-    broadcast(req.params.id, 'message', { username: req.session.username, message: text });
+    broadcast(req.params.id, 'message', {
+        username: req.session.username,
+        displayName: req.session.displayName || req.session.username,
+        avatarUrl: req.session.avatarUrl || null,
+        message: text,
+    });
     res.json({ ok: true });
 });
 
@@ -507,3 +556,5 @@ module.exports = router;
 // Live-game hooks called by the signed internal routes (see internal.js).
 module.exports.setLiveGame = setLiveGame;
 module.exports.endLiveGame = endLiveGame;
+// Called by account.js when a user changes their display name.
+module.exports.refreshMemberIdentity = refreshMemberIdentity;

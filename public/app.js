@@ -108,7 +108,8 @@ document.getElementById('form-login').addEventListener('submit', async e => {
     if (data.error) {
         document.getElementById('login-error').textContent = data.error;
     } else {
-        currentUser = { userId: data.userId, username: data.username };
+        currentUser = data;            // full profile (userId, username, displayName, avatarUrl, …)
+        connectLobbySSE();
         showLobby();
     }
 });
@@ -120,7 +121,8 @@ document.getElementById('form-register').addEventListener('submit', async e => {
     if (data.error) {
         document.getElementById('register-error').textContent = data.error;
     } else {
-        currentUser = { userId: data.userId, username: data.username };
+        currentUser = data;            // full profile
+        connectLobbySSE();
         showLobby();
     }
 });
@@ -140,6 +142,65 @@ async function logout() {
     document.getElementById(id).addEventListener('click', logout)
 );
 
+// ── Avatar ─────────────────────────────────────────────────────────
+// Returns an HTML string: the user's Google picture if set, else a generated
+// initials monogram with a deterministic colour. Reused for presence, chat,
+// matchup cards and the account view.
+function avatarHTML(displayName, avatarUrl, extraClass) {
+    const cls = 'avatar' + (extraClass ? ' ' + extraClass : '');
+    if (avatarUrl) return `<img class="${cls}" src="${String(avatarUrl).replace(/"/g, '&quot;')}" alt="">`;
+    const s = (displayName || '?').trim();
+    const parts = s.split(/\s+/).filter(Boolean);
+    const initials = (parts.length > 1 ? parts[0][0] + parts[1][0] : s.slice(0, 2)).toUpperCase();
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return `<span class="${cls} avatar-mono" style="--mono:${h % 360}">${escHtml(initials)}</span>`;
+}
+
+// ── Account view ───────────────────────────────────────────────────
+function showAccount() {
+    hideLobby();
+    renderAccount();
+    showView('view-account');
+}
+
+function renderAccount() {
+    const u = currentUser;
+    document.getElementById('account-avatar').innerHTML = avatarHTML(u.displayName, u.avatarUrl, 'avatar-lg');
+    document.getElementById('account-display-name').textContent = u.displayName;
+    document.getElementById('account-username').textContent = '@' + u.username;
+    document.getElementById('account-display-input').value = u.displayName;
+    document.getElementById('account-email').textContent = u.email ? `Email · ${u.email}` : 'No email on file';
+    document.getElementById('account-since').textContent =
+        'Member since ' + new Date((u.createdAt || 0) * 1000).toLocaleDateString();
+    // Change-password only applies to password accounts (not Google-only).
+    document.getElementById('account-password-section').hidden = !u.hasPassword;
+    document.getElementById('account-error').textContent = '';
+}
+
+document.getElementById('btn-account').addEventListener('click', showAccount);
+document.getElementById('btn-account-back').addEventListener('click', showLobby);
+
+document.getElementById('btn-save-display').addEventListener('click', async () => {
+    const displayName = document.getElementById('account-display-input').value.trim();
+    const data = await api('PUT', '/api/account', { displayName });
+    if (data.error) { document.getElementById('account-error').textContent = data.error; return; }
+    currentUser = data;
+    renderAccount();
+});
+
+document.getElementById('btn-change-pw').addEventListener('click', async () => {
+    const currentPassword = document.getElementById('account-cur-pw').value;
+    const newPassword     = document.getElementById('account-new-pw').value;
+    const err = document.getElementById('account-error');
+    const data = await api('POST', '/api/account/password', { currentPassword, newPassword });
+    if (data.error) { err.textContent = data.error; return; }
+    document.getElementById('account-cur-pw').value = '';
+    document.getElementById('account-new-pw').value = '';
+    err.style.color = 'var(--text-dim)';
+    err.textContent = 'Password changed.';
+});
+
 // ── Lobby view ─────────────────────────────────────────────────────
 let _lobbyPollTimer = null;
 
@@ -147,7 +208,7 @@ function showLobby() {
     localStorage.removeItem('bbInGame');   // back at the lobby means we're not in a game
     _spectating = false;
     document.getElementById('btn-exit-game').textContent = 'Quit Game';
-    document.getElementById('lobby-greeting').textContent = currentUser.username;
+    document.getElementById('lobby-greeting').textContent = currentUser.displayName || currentUser.username;
     showView('view-lobby');
     pollLobby();
     _lobbyPollTimer = setInterval(pollLobby, 3000);
@@ -176,11 +237,10 @@ function connectLobbySSE() {
         renderLobbyOnline(d.online);
         renderOngoingGames(d.games);
         document.getElementById('lobby-messages').innerHTML = '';
-        d.messages.forEach(m => appendLobbyMessage(m.username, m.message));
+        d.messages.forEach(appendLobbyMessage);
     });
     es.addEventListener('chat', e => {
-        const d = JSON.parse(e.data);
-        appendLobbyMessage(d.username, d.message);
+        appendLobbyMessage(JSON.parse(e.data));
     });
     es.addEventListener('presence', e => {
         const d = JSON.parse(e.data);
@@ -209,7 +269,8 @@ function renderLobbyOnline(online) {
             + (isSelf ? ' lobby-online-self' : '')
             + (u.status === 'in-game' ? ' lobby-online-ingame' : '');
         const tag = u.status === 'in-game' ? '<span class="lobby-online-tag">in game</span>' : '';
-        li.innerHTML = `<span class="lobby-online-name">${escHtml(u.username)}</span>${tag}`;
+        li.innerHTML = `${avatarHTML(u.displayName, u.avatarUrl, 'avatar-sm')}`
+            + `<span class="lobby-online-name">${escHtml(u.displayName || u.username)}</span>${tag}`;
         list.appendChild(li);
     });
 }
@@ -227,9 +288,9 @@ function renderOngoingGames(games) {
         card.className = 'lobby-game-card';
         card.innerHTML = `
             <div class="lobby-game-teams">
-                <span class="lobby-game-side">${escHtml(g.home || '—')}</span>
+                <span class="lobby-game-side">${avatarHTML(g.home, g.homeAvatar, 'avatar-sm')}${escHtml(g.home || '—')}</span>
                 <span class="lobby-game-score">${score}</span>
-                <span class="lobby-game-side lobby-game-away">${escHtml(g.away || '—')}</span>
+                <span class="lobby-game-side lobby-game-away">${escHtml(g.away || '—')}${avatarHTML(g.away, g.awayAvatar, 'avatar-sm')}</span>
             </div>
             <div class="lobby-game-foot">
                 <span class="lobby-game-turn">${turn}</span>
@@ -309,14 +370,16 @@ function leaveSpectate() {
     showLobby();
 }
 
-function appendLobbyMessage(username, text) {
+function appendLobbyMessage(m) {
     const msgs = document.getElementById('lobby-messages');
     if (!msgs) return;
+    const name   = m.displayName || m.username;
+    const isSelf = m.username === currentUser.username;
     const div = document.createElement('div');
     div.className = 'room-message';
-    const isSelf = username === currentUser.username;
-    div.innerHTML = `<span class="room-msg-author${isSelf ? ' room-msg-self' : ''}">${escHtml(username)}</span>`
-        + `<span class="room-msg-text">${escHtml(text)}</span>`;
+    div.innerHTML = avatarHTML(name, m.avatarUrl, 'avatar-sm')
+        + `<span class="room-msg-author${isSelf ? ' room-msg-self' : ''}">${escHtml(name)}</span>`
+        + `<span class="room-msg-text">${escHtml(m.message)}</span>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
 }
@@ -947,8 +1010,8 @@ function connectRoomSSE(roomId) {
 
     es.addEventListener('joined', e => {
         const d = JSON.parse(e.data);
-        _roomAway = d.awayUsername || null;
-        document.getElementById('room-away-username').textContent = d.awayUsername;
+        _roomAway = d.awayUsername || null;   // keep username for chat-colour/identity logic
+        document.getElementById('room-away-username').textContent = d.awayDisplay || d.awayUsername;
         document.getElementById('room-away-team').textContent     =
             d.awayTeamName ? `${d.awayTeamName} · ${d.awayRace}` : '';
         document.getElementById('room-away-status').textContent   = 'Not ready';
@@ -957,18 +1020,18 @@ function connectRoomSSE(roomId) {
         document.getElementById('room-watch-bar').hidden   = true;   // seat taken
         loadRoster('away');
         refreshReadyButton();
-        appendSystemMessage(`${d.awayUsername} joined the room.`);
+        appendSystemMessage(`${d.awayDisplay || d.awayUsername} joined the room.`);
     });
 
     es.addEventListener('message', e => {
-        const d = JSON.parse(e.data);
-        appendChatMessage(d.username, d.message);
+        appendChatMessage(JSON.parse(e.data));
     });
 
     es.addEventListener('spectator', e => {
         const d = JSON.parse(e.data);
         if (d.username === currentUser.username) return;   // don't narrate yourself
-        appendSystemMessage(`${d.username} ${d.action === 'joined' ? 'is now watching' : 'stopped watching'}.`);
+        const name = d.displayName || d.username;
+        appendSystemMessage(`${name} ${d.action === 'joined' ? 'is now watching' : 'stopped watching'}.`);
     });
 
     es.addEventListener('left', e => {
@@ -1048,14 +1111,14 @@ function renderRoomInit(state) {
     _roomHome = state.homeUsername || null;
     _roomAway = state.awayUsername || null;
 
-    document.getElementById('room-home-username').textContent = state.homeUsername;
+    document.getElementById('room-home-username').textContent = state.homeDisplay || state.homeUsername;
     document.getElementById('room-home-team').textContent =
         state.homeTeamName ? `${state.homeTeamName} · ${state.homeRace}` : '';
     if (state.homeTeamName) setRoomLogo('home', state.homeRace);
 
     const hasAway = !!state.awayUsername;
     document.getElementById('room-away-username').textContent =
-        hasAway ? state.awayUsername : '—';
+        hasAway ? (state.awayDisplay || state.awayUsername) : '—';
     document.getElementById('room-away-team').textContent =
         hasAway ? (state.awayTeamName ? `${state.awayTeamName} · ${state.awayRace}` : '') : 'Waiting for opponent…';
     if (hasAway && state.awayTeamName) setRoomLogo('away', state.awayRace);
@@ -1085,7 +1148,7 @@ function renderRoomInit(state) {
     loadRoster('away');
     refreshReadyButton();
 
-    state.messages.forEach(m => appendChatMessage(m.username, m.message));
+    state.messages.forEach(appendChatMessage);
     updateReadyState(state.homeReady, state.awayReady);
 }
 
@@ -1152,17 +1215,20 @@ function updateReadyState(homeReady, awayReady) {
     }
 }
 
-function appendChatMessage(username, text) {
+function appendChatMessage(m) {
     const msgs = document.getElementById('room-messages');
     const div  = document.createElement('div');
     div.className = 'room-message';
-    const isSelf = username === currentUser.username;
-    // Colour-code by role so players and spectators are easy to tell apart.
-    const role = username === _roomHome ? 'room-msg-home'
-               : username === _roomAway ? 'room-msg-away'
+    const isSelf = m.username === currentUser.username;
+    const name   = m.displayName || m.username;
+    // Colour-code by role (keyed on the stable username) so players and
+    // spectators are easy to tell apart.
+    const role = m.username === _roomHome ? 'room-msg-home'
+               : m.username === _roomAway ? 'room-msg-away'
                : 'room-msg-spectator';
-    div.innerHTML = `<span class="room-msg-author ${role}${isSelf ? ' room-msg-me' : ''}">${escHtml(username)}</span>`
-        + `<span class="room-msg-text">${escHtml(text)}</span>`;
+    div.innerHTML = avatarHTML(name, m.avatarUrl, 'avatar-sm')
+        + `<span class="room-msg-author ${role}${isSelf ? ' room-msg-me' : ''}">${escHtml(name)}</span>`
+        + `<span class="room-msg-text">${escHtml(m.message)}</span>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
 

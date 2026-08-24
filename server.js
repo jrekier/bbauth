@@ -58,6 +58,7 @@ app.use(express.static('public'));
 // server-to-server calls that carry no session cookie.
 app.use('/api', require('./src/routes/internal'));
 app.use('/api', require('./src/routes/auth'));
+app.use('/api', require('./src/routes/account'));
 app.use('/api', require('./src/routes/team'));
 app.use('/api', require('./src/routes/play'));
 app.use('/api', require('./src/routes/lobby'));

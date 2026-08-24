@@ -49,6 +49,7 @@
             <div class="header-row">
                 <h1 id="lobby-greeting"></h1>
                 <div class="header-btns">
+                    <button class="btn-ghost" id="btn-account">Account</button>
                     <button class="btn-ghost" id="btn-manage-teams">My Teams</button>
                     <button class="btn-ghost" id="btn-logout-lobby">Logout</button>
                 </div>
@@ -107,6 +108,44 @@
 
         <div class="teams-footer">
             <button class="btn-primary" id="btn-new-team">+ New Team</button>
+        </div>
+    </div>
+
+    <!-- ── Account view ────────────────────────────────────────── -->
+    <div id="view-account" class="view" hidden>
+        <header>
+            <div class="header-row">
+                <h1>Account</h1>
+                <button class="btn-ghost" id="btn-account-back">← Lobby</button>
+            </div>
+        </header>
+
+        <div class="card account-card">
+            <div class="account-head">
+                <span id="account-avatar"></span>
+                <div class="account-head-text">
+                    <div class="account-display" id="account-display-name"></div>
+                    <div class="account-username" id="account-username"></div>
+                </div>
+            </div>
+
+            <label>Display name</label>
+            <div class="account-row">
+                <input type="text" id="account-display-input" maxlength="32" autocomplete="off">
+                <button class="btn-primary" id="btn-save-display">Save</button>
+            </div>
+
+            <p class="account-meta" id="account-email"></p>
+            <p class="account-meta" id="account-since"></p>
+
+            <div id="account-password-section">
+                <h3>Change password</h3>
+                <input type="password" id="account-cur-pw" placeholder="Current password" autocomplete="current-password">
+                <input type="password" id="account-new-pw" placeholder="New password" autocomplete="new-password">
+                <button class="btn-ghost" id="btn-change-pw">Change password</button>
+            </div>
+
+            <p class="form-error" id="account-error"></p>
         </div>
     </div>
 
