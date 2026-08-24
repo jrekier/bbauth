@@ -143,12 +143,24 @@ async function logout() {
 );
 
 // ── Avatar ─────────────────────────────────────────────────────────
+// Only render an image URL we're willing to fetch. Rejects javascript:, data:
+// and friends, which matters once Google sign-in starts populating avatar_url.
+function safeImageUrl(url) {
+    if (!url) return null;
+    try {
+        const u = new URL(String(url), window.location.href);
+        return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : null;
+    } catch { return null; }
+}
+
 // Returns an HTML string: the user's Google picture if set, else a generated
 // initials monogram with a deterministic colour. Reused for presence, chat,
 // matchup cards and the account view.
 function avatarHTML(displayName, avatarUrl, extraClass) {
     const cls = 'avatar' + (extraClass ? ' ' + extraClass : '');
-    if (avatarUrl) return `<img class="${cls}" src="${String(avatarUrl).replace(/"/g, '&quot;')}" alt="">`;
+    const src = safeImageUrl(avatarUrl);
+    // no-referrer: don't leak our URLs to whoever hosts the picture.
+    if (src) return `<img class="${escHtml(cls)}" src="${escHtml(src)}" alt="" referrerpolicy="no-referrer">`;
     const s = (displayName || '?').trim();
     const parts = s.split(/\s+/).filter(Boolean);
     const initials = (parts.length > 1 ? parts[0][0] + parts[1][0] : s.slice(0, 2)).toUpperCase();
@@ -768,12 +780,12 @@ function renderRoster() {
             <canvas class="sprite-preview" width="32" height="32"></canvas>
             <div class="roster-item-body">
                 <div class="roster-item-top">
-                    <input type="text" value="${slot.name}" placeholder="Player name" maxlength="32">
-                    <span class="pos-label">${slot.pos}</span>
+                    <input type="text" value="${escHtml(slot.name)}" placeholder="Player name" maxlength="32">
+                    <span class="pos-label">${escHtml(slot.pos)}</span>
                     <button class="btn-remove" title="Remove">×</button>
                 </div>
                 <div class="roster-item-skills">
-                    ${slot.skills.map(s => `<span class="skill-chip">${s}</span>`).join('')}
+                    ${slot.skills.map(s => `<span class="skill-chip">${escHtml(s)}</span>`).join('')}
                     <button type="button" class="btn-add-skill">+ skill</button>
                 </div>
             </div>`;
@@ -1251,8 +1263,12 @@ function appendSystemMessage(text) {
     msgs.scrollTop = msgs.scrollHeight;
 }
 
+// Safe for both text and attribute contexts (quotes included), so the same
+// helper works wherever it lands inside a template literal.
 function escHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Watcher claims the open seat → join as the away player (reconnects the room
