@@ -81,14 +81,31 @@ db.exec(`
 // ── Migrations ─────────────────────────────────────────────────────
 // Add the team "extras" (re-rolls, staff, inducements) column to older DBs.
 // node:sqlite throws if the column already exists, so guard with a check.
-const teamCols = db.prepare(`PRAGMA table_info(teams)`).all().map(c => c.name);
-if (!teamCols.includes('extras')) {
-    db.exec(`ALTER TABLE teams ADD COLUMN extras TEXT`);
+// node:sqlite throws if the column already exists, so check before adding.
+function addColumn(table, column, decl) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+    if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
 }
-// Inducements are drafted with the team in Matched Play, so they live on the
-// team rather than being chosen per match.
-if (!teamCols.includes('inducements')) {
-    db.exec(`ALTER TABLE teams ADD COLUMN inducements TEXT`);
-}
+
+// Team "extras" (re-rolls, sideline staff) on older DBs.
+addColumn('teams', 'extras', 'TEXT');
+// A team's Treasury. The coach keeps this in step with their league by hand —
+// bbauth deliberately does no league bookkeeping (that is tourplay's job), but
+// League Play petty cash cannot be worked out without knowing each side's gold.
+addColumn('teams', 'treasury', 'INTEGER NOT NULL DEFAULT 0');
+
+// Per-match inducements. In League Play these belong to the fixture, not the
+// team: they are bought in the staging room once both CTVs are known.
+//   *_tv              CTV frozen when both coaches readied up
+//   *_inducements     what each coach bought, as JSON
+//   *_treasury_spend  gold taken from that coach's Treasury
+//   inducement_turn   'home' | 'away' while buying, NULL once both are done
+addColumn('pending_rooms', 'home_tv',             'INTEGER NOT NULL DEFAULT 0');
+addColumn('pending_rooms', 'away_tv',             'INTEGER NOT NULL DEFAULT 0');
+addColumn('pending_rooms', 'home_inducements',    'TEXT');
+addColumn('pending_rooms', 'away_inducements',    'TEXT');
+addColumn('pending_rooms', 'home_treasury_spend', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('pending_rooms', 'away_treasury_spend', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('pending_rooms', 'inducement_turn',     'TEXT');
 
 module.exports = db;

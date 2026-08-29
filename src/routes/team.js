@@ -1,7 +1,7 @@
 const express     = require('express');
 const db          = require('../db');
 const { requireAuth } = require('../auth-middleware');
-const { ROSTER_DEFS, availableInducements } = require('../../public/roster-defs');
+const { ROSTER_DEFS } = require('../../public/roster-defs');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -24,20 +24,10 @@ function sanitizeExtras(raw) {
     };
 }
 
-// Same treatment for inducements: coerced to non-negative integers, with
-// rulebook maximums NOT applied. Anything the race cannot take is dropped
-// though — an unknown key, or one gated behind a special rule this team does
-// not have. That is availability, not a limit: the builder never offers a
-// Dwarf a Plague Doctor, and honouring one would put a resource in the game
-// that the team cannot have at all.
-function sanitizeInducements(race, raw) {
-    const i = raw && typeof raw === 'object' ? raw : {};
-    const out = {};
-    for (const ind of availableInducements(race)) {
-        const n = Math.max(0, Math.min(EXTRAS_CEILING, Math.floor(Number(i[ind.key]) || 0)));
-        if (n) out[ind.key] = n;
-    }
-    return out;
+// A team's Treasury, in gold. Coach-maintained: they keep it in step with
+// whatever their league says. Coerced to a non-negative integer, nothing more.
+function sanitizeTreasury(raw) {
+    return Math.max(0, Math.floor(Number(raw) || 0));
 }
 
 // Data integrity only: no budget, roster-size or positional limits. A position
@@ -65,16 +55,15 @@ function parseColour(raw) {
 }
 
 function expandRow(t) {
-    let extras = null, inducements = null;
-    try { extras      = t.extras      ? JSON.parse(t.extras)      : null; } catch {}
-    try { inducements = t.inducements ? JSON.parse(t.inducements) : null; } catch {}
+    let extras = null;
+    try { extras = t.extras ? JSON.parse(t.extras) : null; } catch {}
     return {
         ...t,
         roster:      JSON.parse(t.roster),
         homeColour:  parseColour(t.home_colour),
         awayColour:  parseColour(t.away_colour),
         extras,
-        inducements,
+        treasury:    t.treasury || 0,
     };
 }
 
@@ -96,13 +85,13 @@ router.post('/teams', (req, res) => {
     const { name, race, roster, homeColour, awayColour } = req.body;
     if (!name || !race || !Array.isArray(roster))
         return res.status(400).json({ error: 'name, race, and roster are required' });
-    const extras      = sanitizeExtras(req.body.extras);
-    const inducements = sanitizeInducements(race, req.body.inducements);
+    const extras   = sanitizeExtras(req.body.extras);
+    const treasury = sanitizeTreasury(req.body.treasury);
     if (!validateRoster(race, roster, res)) return;
     const hc = homeColour ? JSON.stringify(homeColour) : null;
     const ac = awayColour ? JSON.stringify(awayColour) : null;
-    const result = db.prepare('INSERT INTO teams (user_id, name, race, roster, home_colour, away_colour, extras, inducements) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(req.session.userId, name, race, JSON.stringify(roster), hc, ac, JSON.stringify(extras), JSON.stringify(inducements));
+    const result = db.prepare('INSERT INTO teams (user_id, name, race, roster, home_colour, away_colour, extras, treasury) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(req.session.userId, name, race, JSON.stringify(roster), hc, ac, JSON.stringify(extras), treasury);
     res.json({ ok: true, id: result.lastInsertRowid });
 });
 
@@ -113,13 +102,13 @@ router.put('/teams/:id', (req, res) => {
     const { name, race, roster, homeColour, awayColour } = req.body;
     if (!name || !race || !Array.isArray(roster))
         return res.status(400).json({ error: 'name, race, and roster are required' });
-    const extras      = sanitizeExtras(req.body.extras);
-    const inducements = sanitizeInducements(race, req.body.inducements);
+    const extras   = sanitizeExtras(req.body.extras);
+    const treasury = sanitizeTreasury(req.body.treasury);
     if (!validateRoster(race, roster, res)) return;
     const hc = homeColour ? JSON.stringify(homeColour) : null;
     const ac = awayColour ? JSON.stringify(awayColour) : null;
-    db.prepare('UPDATE teams SET name = ?, race = ?, roster = ?, home_colour = ?, away_colour = ?, extras = ?, inducements = ? WHERE id = ?')
-        .run(name, race, JSON.stringify(roster), hc, ac, JSON.stringify(extras), JSON.stringify(inducements), req.params.id);
+    db.prepare('UPDATE teams SET name = ?, race = ?, roster = ?, home_colour = ?, away_colour = ?, extras = ?, treasury = ? WHERE id = ?')
+        .run(name, race, JSON.stringify(roster), hc, ac, JSON.stringify(extras), treasury, req.params.id);
     res.json({ ok: true });
 });
 

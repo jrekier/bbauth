@@ -413,6 +413,10 @@ function expandTeam(dbTeam) {
         specialRules:     [...(raceDef.specialRules || [])],
         // What was bought, kept for display; the effect is already in `res`.
         inducements:      { ...ind },
+        // Inducements the engine acts on directly rather than by topping up a
+        // resource. Prayers/Desperate Measures are rolled later, at launch.
+        kegs:             ind.kegs || 0,
+        masterChef:       !!ind.masterChef,
         ...res,
     };
 }
@@ -491,12 +495,11 @@ function extrasCost(race, extras, tvOnly) {
     return total;
 }
 
-// Gold actually spent building the team: every player, every extra, and — in
-// Matched Play — every inducement, since they all come out of one budget.
-function teamCost(race, roster, extras, inducements) {
-    return rosterCost(race, roster)
-         + extrasCost(race, extras, false)
-         + inducementsCost(race, inducements);
+// Gold actually spent drafting the team: every player, every extra. Inducements
+// are NOT here — in League Play they are bought per match out of Petty Cash and
+// Treasury, not out of the draft budget.
+function teamCost(race, roster, extras) {
+    return rosterCost(race, roster) + extrasCost(race, extras, false);
 }
 
 // Team Value — players plus the TV-counting extras. Deliberately not the same
@@ -504,6 +507,127 @@ function teamCost(race, roster, extras, inducements) {
 // inducements never count toward TV at all.
 function teamValue(race, roster, extras) {
     return rosterCost(race, roster) + extrasCost(race, extras, true);
+}
+
+// ── Prayers to Nuffle (Sevens D8 table) ────────────────────────────
+// Sevens has its own table — "Nuffle prefers to focus on grandiose spectacles
+// after all". One roll per Prayer bought, duplicates re-rolled.
+//
+// `kind` says how each result reaches the game:
+//   'player'  — buffs one player; applied to the team def before kick-off
+//   'team'    — a flag webbb acts on for the whole match
+const PRAYERS_TO_NUFFLE = [
+    { d8: 1, key: 'treacherousTrapdoor', label: 'Treacherous Trapdoor', kind: 'team',
+      text: 'Each time a player from either team enters a square containing a Trapdoor, roll a D6; on a 1 they fall through and are injured as if pushed into the crowd, and any ball they held bounces.' },
+    { d8: 2, key: 'stiletto',        label: 'Stiletto',             kind: 'player', grant: 'Stab',
+      text: 'One player gains the Stab trait for the game.' },
+    { d8: 3, key: 'ironMan',         label: 'Iron Man',             kind: 'player', avBonus: 1,
+      text: "One player's AV improves by 1 (to a maximum of 11) for the game." },
+    { d8: 4, key: 'knuckleDusters',  label: 'Knuckle Dusters',      kind: 'player', grant: 'Mighty Blow',
+      text: 'One player gains the Mighty Blow skill for the game.' },
+    { d8: 5, key: 'blessingOfNuffle',label: 'Blessing of Nuffle',   kind: 'player', grant: 'Pro',
+      text: 'One randomly selected player gains the Pro skill for the game.' },
+    { d8: 6, key: 'molesUnderPitch', label: 'Moles Under the Pitch', kind: 'team',
+      text: 'Opposition players apply -1 to Rush attempts.' },
+    { d8: 7, key: 'underScrutiny',   label: 'Under Scrutiny',        kind: 'team',
+      text: 'Opposition players are automatically sent off for a foul that breaks armour, doubles or not.' },
+    { d8: 8, key: 'intensiveTraining', label: 'Intensive Training',  kind: 'player', grant: 'Block',
+      text: 'One randomly selected player gains a primary skill of your choice for the game.',
+      note: 'The choice of skill is not offered yet — Block is granted.' },
+];
+
+// ── Desperate Measures (Sevens-only D8 table) ──────────────────────
+// One roll per Desperate Measure bought, re-rolling duplicates. Each is used
+// once per game. Every one of them is a thing the coach ACTIVATES at a chosen
+// moment, so none are wired to the engine yet — they are rolled, carried and
+// shown, and `implemented` stays false until each gets its trigger.
+const DESPERATE_MEASURES = [
+    { d8: 1, key: 'youDope',        label: 'You Dope!',               implemented: false,
+      text: "Improve one player's ST or AG by 1 for the game. At the end of each drive they play in, roll a D6: on 1-2 they are Knocked-out with no recovery allowed." },
+    { d8: 2, key: 'razzleDazzle',   label: 'Razzle-dazzle',           implemented: false,
+      text: 'When activating a player, declare two Actions instead of one (not the same Action twice, and not two Move Actions).' },
+    { d8: 3, key: 'hangover',       label: 'Hangover',                implemented: false,
+      text: 'Before setup, choose one opposition player who cannot take part in the first Drive.' },
+    { d8: 4, key: 'grudgeMatch',    label: 'Grudge Match',            implemented: false,
+      text: 'Declare a Foul Action even if your team already fouled this turn; the player cannot be Sent-off for it.' },
+    { d8: 5, key: 'setPiece',       label: 'Set Piece',               implemented: false,
+      text: 'One pass is Accurate on a 2+, and the receiving player catches automatically on a 2+.' },
+    { d8: 6, key: 'sportsEspionage', label: 'Sports Espionage',       implemented: false,
+      text: 'When your team suffers a Turnover, gain two Team Re-rolls afterwards (they cannot re-roll the dice that caused it).' },
+    { d8: 7, key: 'bananaSkin',     label: 'Discarded Banana Skin',   implemented: false,
+      text: 'When an opposition player enters one of your Tackle Zones, place them Prone and end their activation. No Turnover unless they held the ball.' },
+    { d8: 8, key: 'magicScroll',    label: 'Magic Scroll',            implemented: false,
+      text: 'Before setup, gain a free Sports-Wizard Inducement.',
+      note: 'Sevens has no Wizard inducement at all, so this needs one built first.' },
+];
+
+// Roll `n` distinct results off a D8 table. Duplicates are re-rolled, which is
+// explicit for Desperate Measures and the usual convention for Prayers.
+function rollD8Table(table, n) {
+    const taken = new Set();
+    const out = [];
+    for (let i = 0; i < Math.min(n, table.length); i++) {
+        let d8;
+        do { d8 = Math.floor(Math.random() * 8) + 1; } while (taken.has(d8));
+        taken.add(d8);
+        out.push(table.find(e => e.d8 === d8).key);
+    }
+    return out;
+}
+
+// Apply the player-buff prayers to an expanded team def, in place. Returns a
+// log line per prayer so the coaches can see what Nuffle did.
+// The target is random: the rulebook lets the coach pick for some of these, but
+// there is no picker yet, so every one of them rolls for a target.
+function applyPrayers(teamDef, prayerKeys) {
+    const log = [];
+    for (const key of prayerKeys || []) {
+        const pr = PRAYERS_TO_NUFFLE.find(p => p.key === key);
+        if (!pr) continue;
+        if (pr.kind !== 'player') { log.push(`${teamDef.name}: ${pr.label} — ${pr.text}`); continue; }
+
+        const eligible = teamDef.players.filter(Boolean);
+        if (!eligible.length) continue;
+        const target = eligible[Math.floor(Math.random() * eligible.length)];
+
+        if (pr.grant && !target.skills.includes(pr.grant)) {
+            target.skills.push(pr.grant);
+            // Tag it so webbb can colour a prayer-granted ability differently
+            // in the action wheel from one the player always had.
+            (target.prayerSkills || (target.prayerSkills = [])).push(pr.grant);
+        }
+        if (pr.avBonus) target.av = Math.min(11, (target.av || 0) + pr.avBonus);
+        log.push(`${teamDef.name}: ${pr.label} — ${target.name}${pr.grant ? ` gains ${pr.grant}` : ''}${pr.avBonus ? ` improves to AV ${target.av}+` : ''}.`);
+    }
+    return log;
+}
+
+// ── Petty cash ─────────────────────────────────────────────────────
+// League Play, in the book's own order:
+//   1. Compare CTV.
+//   2. The HIGHER-CTV coach spends Treasury gold on inducements first.
+//   3. The LOWER-CTV coach then receives Petty Cash equal to the CTV difference
+//      plus whatever the other coach just spent from Treasury.
+//   4. They may top up with at most 50,000 more from their own Treasury.
+// Unspent Petty Cash is lost. With equal CTVs nobody is the underdog, so there
+// is no Petty Cash and each coach simply spends their own Treasury.
+const PETTY_CASH_TOP_UP = 50000;
+
+// Petty cash for the second coach to buy. `myTV`/`theirTV` are the two CTVs and
+// `theirTreasurySpend` is the gold the first coach just spent.
+function pettyCash(myTV, theirTV, theirTreasurySpend) {
+    if (myTV >= theirTV) return 0;          // not the underdog — no petty cash
+    return (theirTV - myTV) + (theirTreasurySpend || 0);
+}
+
+// Everything the second coach may spend: petty cash, plus a capped dip into
+// their own Treasury. A coach who is not the underdog just spends Treasury.
+function inducementBudget(myTV, theirTV, theirTreasurySpend, myTreasury) {
+    const petty = pettyCash(myTV, theirTV, theirTreasurySpend);
+    const fromTreasury = petty > 0
+        ? Math.min(PETTY_CASH_TOP_UP, myTreasury || 0)
+        : (myTreasury || 0);
+    return { petty, fromTreasury, total: petty + fromTreasury };
 }
 
 // TV is quoted in thousands: 1150000 → "1,150k".
@@ -515,10 +639,9 @@ function formatTV(tv) {
 // Blood Bowl Sevens has its own, shorter inducement list at its own prices —
 // the standard Blood Bowl table does NOT apply here.
 //
-// This app plays Matched Play, where there is no petty cash: inducements come
-// out of the same 600,000 draft budget as players and staff, and unspent gold
-// is simply lost. (League Play's petty cash sequence needs a Treasury, which
-// this app deliberately does not model — that is tourplay's business.)
+// This app plays League Play: inducements are bought PER MATCH, in the staging
+// room, out of Petty Cash and Treasury — never out of the draft budget. So they
+// live on the match (pending_rooms), not on the team.
 //
 // Inducements never count toward Team Value, in any mode.
 //
@@ -527,19 +650,30 @@ function formatTV(tv) {
 // `implemented: false` means we carry and price it, but the game does not act
 // on it yet — the builder shows those dimmed rather than pretending.
 const INDUCEMENTS = [
-    { key: 'prayersToNuffle',       label: 'Prayers to Nuffle',           cost:   5000, max: 2, implemented: false },
-    { key: 'tempCheerleaders',      label: 'Temp Agency Cheerleaders',    cost:  15000, max: 2, implemented: true,  applies: 'cheerleaders' },
-    { key: 'partTimeCoaches',       label: 'Part-Time Assistant Coaches', cost:  15000, max: 2, implemented: true,  applies: 'assistantCoaches' },
-    { key: 'kegs',                  label: "Blitzer's Best Kegs",         cost:  50000, max: 2, implemented: false },
-    { key: 'desperateMeasures',     label: 'Desperate Measures',          cost:  50000, max: 5, implemented: false },
+    { key: 'prayersToNuffle',       label: 'Prayers to Nuffle',           cost:   5000, max: 2, implemented: true,  
+      text: "Roll on the Sevens Prayers to Nuffle table. Each prayer lasts the whole match." },
+    { key: 'tempCheerleaders',      label: 'Temp Agency Cheerleaders',    cost:  15000, max: 2, implemented: true,  applies: 'cheerleaders', 
+      text: "Adds to your Cheering Fans roll on the kick-off table." },
+    { key: 'partTimeCoaches',       label: 'Part-Time Assistant Coaches', cost:  15000, max: 2, implemented: true,  applies: 'assistantCoaches', 
+      text: "Adds to your Brilliant Coaching roll on the kick-off table." },
+    { key: 'kegs',                  label: "Blitzer's Best Kegs",         cost:  50000, max: 2, implemented: true,  
+      text: "+1 to every roll to recover a Knocked-out player, all match." },
+    { key: 'desperateMeasures',     label: 'Desperate Measures',          cost:  50000, max: 5, implemented: false, 
+      text: "Roll a D8 each on the Desperate Measures table. Each is used once per game." },
     { key: 'bribes',                label: 'Bribes',                      cost: 100000, max: 2, implemented: true,  applies: 'bribes',
-      discountRule: 'Bribery and Corruption', discountCost: 50000 },
+      discountRule: 'Bribery and Corruption', discountCost: 50000, 
+      text: "Spend one to avoid a sending-off after a foul. Roll 2+ or it is wasted." },
     { key: 'wanderingApothecaries', label: 'Wandering Apothecaries',      cost: 100000, max: 1, implemented: true,  applies: 'apothecary',
-      requiresApothecary: true },
-    { key: 'mortuaryAssistant',     label: 'Mortuary Assistant',          cost: 100000, max: 1, implemented: false, requiresRule: 'Masters of Undeath' },
-    { key: 'plagueDoctor',          label: 'Plague Doctor',               cost: 100000, max: 1, implemented: false, requiresRule: 'Favoured of Nurgle' },
-    { key: 'extraTeamTraining',     label: 'Extra Team Training',         cost: 125000, max: 6, implemented: true,  applies: 'rerolls' },
-    { key: 'masterChef',            label: 'Halfling Master Chef',        cost: 300000, max: 1, implemented: false },
+      requiresApothecary: true, 
+      text: "A second apothecary for the match." },
+    { key: 'mortuaryAssistant',     label: 'Mortuary Assistant',          cost: 100000, max: 1, implemented: false, requiresRule: 'Masters of Undeath', 
+      text: "Improves your chance of raising a killed opponent." },
+    { key: 'plagueDoctor',          label: 'Plague Doctor',               cost: 100000, max: 1, implemented: false, requiresRule: 'Favoured of Nurgle', 
+      text: "Improves your chance of raising a killed opponent as a Rotter." },
+    { key: 'extraTeamTraining',     label: 'Extra Team Training',         cost: 125000, max: 6, implemented: true,  applies: 'rerolls', 
+      text: "One extra Team Re-roll for this match." },
+    { key: 'masterChef',            label: 'Halfling Master Chef',        cost: 300000, max: 1, implemented: true,  
+      text: "Roll 3D6 at the start of each half; each 4+ steals a Team Re-roll from the opponent." },
 ];
 
 // Some rosters may not hire an apothecary. None of ours opt out yet; a future
@@ -625,6 +759,8 @@ if (typeof module !== 'undefined') {
     module.exports = { ROSTER_DEFS, SKILLS, COLOURS, PLAYER_NAMES, expandTeam, rosterCost,
         STAFF_COSTS, STAFF_LIMITS, TV_EXTRAS, DRAFT_BUDGET, TEAM_SPECIAL_RULES,
         INDUCEMENTS, availableInducements, inducementCost, inducementsCost,
+        PETTY_CASH_TOP_UP, pettyCash, inducementBudget,
+        PRAYERS_TO_NUFFLE, DESPERATE_MEASURES, rollD8Table, applyPrayers,
         canHireApothecary, rerollCost, extrasCost,
         teamCost, teamValue, formatTV, randomPlayerName };
 }

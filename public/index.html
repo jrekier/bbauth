@@ -197,8 +197,10 @@
             </div>
 
             <div class="extras-section">
-                <h3>Inducements <span class="section-note">bought from the same budget · never count toward TV</span></h3>
-                <div id="inducements-list"></div>
+                <h3>Treasury <span class="section-note">your league gold · inducements are bought per match, in the room</span></h3>
+                <div class="treasury-row">
+                    <input type="number" id="team-treasury" min="0" step="5000" value="0"> gp
+                </div>
             </div>
 
             <div class="builder-columns">
@@ -248,8 +250,8 @@
                 <span class="room-player-name" id="room-away-username">—</span>
             </div>
 
-            <div class="mu-cell mu-home mu-r-team"><span class="room-player-team" id="room-home-team"></span></div>
-            <div class="mu-cell mu-away mu-r-team"><span class="room-player-team" id="room-away-team">Waiting for opponent…</span></div>
+            <div class="mu-cell mu-home mu-r-team"><span class="room-player-team" id="room-home-team"></span><span class="room-player-tv" id="room-home-tv"></span></div>
+            <div class="mu-cell mu-away mu-r-team"><span class="room-player-team" id="room-away-team">Waiting for opponent…</span><span class="room-player-tv" id="room-away-tv"></span></div>
 
             <div class="mu-cell mu-home mu-r-status"><span class="room-player-status" id="room-home-status">Not ready</span></div>
             <div class="mu-cell mu-away mu-r-status"><span class="room-player-status" id="room-away-status"></span></div>
@@ -262,6 +264,46 @@
             <button class="btn-primary" id="btn-room-ready" disabled>Ready</button>
             <button class="btn-ghost" id="btn-leave-seat" hidden>Leave seat</button>
             <p class="room-ready-hint" id="room-ready-hint"></p>
+        </div>
+
+        <!-- League Play: petty cash + inducements, after both coaches ready up
+             and before the match launches. -->
+        <!-- League Play inducement step. A full-screen takeover: the staging
+             room behind it is already crammed, and this is a blocking decision
+             that deserves the whole screen. -->
+        <div class="inducement-overlay" id="room-inducements" hidden>
+          <div class="ind-screen">
+
+            <header class="ind-top">
+              <div class="ind-top-title">
+                <h3 id="inducement-title">Inducements</h3>
+                <span class="inducement-turnstate" id="inducement-turnstate"></span>
+              </div>
+              <div class="inducement-ctvbar" id="inducement-ctv"></div>
+            </header>
+
+            <p class="inducement-status" id="inducement-status"></p>
+
+            <div class="ind-body">
+              <div class="ind-catalogue" id="inducement-list"></div>
+              <aside class="ind-aside">
+                <div class="inducement-purse" id="inducement-budget" hidden></div>
+                <div class="ind-basket" id="inducement-basket"></div>
+              </aside>
+            </div>
+
+            <!-- The footer is always present: this overlay covers the Ready
+                 button, so without a way out a coach who picked the wrong team
+                 would be stuck here. -->
+            <div class="inducement-foot">
+                <button class="btn-ghost" id="btn-inducements-back">← Back to team selection</button>
+                <span class="ind-foot-buy" id="inducement-foot" hidden>
+                    <span class="inducement-remaining" id="inducement-spent"></span>
+                    <button class="btn-primary" id="btn-inducements-confirm">Confirm purchase</button>
+                </span>
+            </div>
+
+          </div>
         </div>
 
         <!-- Watcher: option to claim the open seat and play instead of watching -->

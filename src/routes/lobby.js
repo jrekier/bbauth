@@ -3,7 +3,9 @@ const express = require('express');
 const crypto  = require('node:crypto');
 const db      = require('../db');
 const { requireAuth }  = require('../auth-middleware');
-const { expandTeam }   = require('../../public/roster-defs');
+const { expandTeam, teamValue, availableInducements, inducementCost,
+        inducementsCost, inducementBudget, PETTY_CASH_TOP_UP,
+        PRAYERS_TO_NUFFLE, DESPERATE_MEASURES, rollD8Table, applyPrayers } = require('../../public/roster-defs');
 const { sign }         = require('../sign');
 const { identity }     = require('./account');   // { username, displayName, avatarUrl } by userId
 
@@ -361,6 +363,11 @@ router.get('/room/:id/events', requireAuth, (req, res) => {
         awayRace:     room.away_race      || null,
         homeReady:    !!room.home_ready,
         awayReady:    !!room.away_ready,
+        inducementTurn: room.inducement_turn || null,
+        // Live CTVs from whatever teams are currently picked, so both coaches
+        // can see the gap (and who will get petty cash) before readying up.
+        homeTV:       room.inducement_turn ? (room.home_tv || 0) : liveTV(room, 'home'),
+        awayTV:       room.inducement_turn ? (room.away_tv || 0) : liveTV(room, 'away'),
         messages,
     });
 
@@ -478,10 +485,13 @@ router.post('/room/:id/team', requireAuth, (req, res) => {
             .run(team.id, team.name, team.race, req.params.id);
     }
 
+    const updatedRoom = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
     broadcast(req.params.id, 'team', {
         side:     isHome ? 'home' : 'away',
         teamName: team.name,
         race:     team.race,
+        homeTV:   liveTV(updatedRoom, 'home'),
+        awayTV:   liveTV(updatedRoom, 'away'),
     });
 
     res.json({ ok: true });
@@ -506,50 +516,265 @@ router.post('/room/:id/ready', requireAuth, (req, res) => {
     const updated = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
     broadcast(req.params.id, 'ready', { homeReady: !!updated.home_ready, awayReady: !!updated.away_ready });
 
-    // Both ready → pre-register the match with webbb, then launch both players.
+    // Both ready → open the inducement step. Nobody launches until it is done.
     if (updated.home_ready && updated.away_ready) {
-        const homeTeam = getTeamForUser(updated.team_id,      updated.home_user_id);
-        const awayTeam = getTeamForUser(updated.away_team_id, updated.away_user_id);
-
-        if (homeTeam && awayTeam) {
-            const base        = process.env.WEBBB_URL || 'http://localhost:3000';
-            const homeTeamDef = expandTeam(homeTeam);
-            const awayTeamDef = expandTeam(awayTeam);
-            const homeToken   = makeToken(updated.home_user_id, updated.home_username, homeTeamDef);
-            const awayToken   = makeToken(updated.away_user_id, updated.away_username, awayTeamDef);
-
-            // Register the game room server-to-server BEFORE redirecting either
-            // browser. The room then exists before anyone connects, so there is no
-            // create/join race — each player just attaches to their slot. Only once
-            // webbb confirms do we push the launch URLs (no action param needed —
-            // the token's userId identifies the side).
-            const regBody = JSON.stringify({
-                roomId: req.params.id,
-                home: { userId: updated.home_user_id, username: updated.home_username, teamDef: homeTeamDef },
-                away: { userId: updated.away_user_id, username: updated.away_username, teamDef: awayTeamDef },
-            });
-            fetch(`${base}/internal/match`, {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json', 'X-BB-Signature': sign(regBody) },
-                body:    regBody,
-            })
-                .then(r => {
-                    if (!r.ok) throw new Error(`webbb returned ${r.status}`);
-                    sendTo(req.params.id, updated.home_user_id, 'launch', { url: `${base}?token=${homeToken}&roomId=${req.params.id}` });
-                    sendTo(req.params.id, updated.away_user_id, 'launch', { url: `${base}?token=${awayToken}&roomId=${req.params.id}` });
-                    // Tell any watchers (who don't get the per-player launch URL) that
-                    // the game has begun, so they can switch to spectating it.
-                    broadcast(req.params.id, 'started', { origin: base, roomId: req.params.id });
-                    // Room and messages stay alive; cleanup happens when all SSE clients disconnect.
-                })
-                .catch(e => {
-                    console.error(`Match registration failed for room ${req.params.id}:`, e.message);
-                    broadcast(req.params.id, 'launch_failed', { error: 'Could not start the game — try readying up again.' });
-                });
-        }
+        openInducements(req.params.id, updated);
+    } else if (updated.inducement_turn) {
+        // Someone un-readied mid-purchase: abandon the step and start over.
+        db.prepare(`UPDATE pending_rooms SET inducement_turn = NULL,
+                    home_inducements = NULL, away_inducements = NULL,
+                    home_treasury_spend = 0, away_treasury_spend = 0 WHERE id = ?`).run(req.params.id);
+        broadcast(req.params.id, 'inducements_cancelled', {
+            byName: req.session.displayName || req.session.username,
+        });
     }
 
     res.json({ ok: true });
+});
+
+// ── launchMatch ───────────────────────────────────────────────────
+// Pre-register the match with webbb, then push each coach their launch URL.
+// Called once the inducement step is finished, never before: the inducements
+// bought in the staging room are folded into each team def here, so webbb
+// receives finished teams and needs no inducement logic of its own.
+function launchMatch(roomId, room) {
+    const homeTeam = getTeamForUser(room.team_id,      room.home_user_id);
+    const awayTeam = getTeamForUser(room.away_team_id, room.away_user_id);
+    if (!homeTeam || !awayTeam) return;
+
+    const base      = process.env.WEBBB_URL || 'http://localhost:3000';
+    const homeInd   = parseInducements(room.home_inducements);
+    const awayInd   = parseInducements(room.away_inducements);
+    const homeTeamDef = expandTeam({ ...homeTeam, inducements: homeInd });
+    const awayTeamDef = expandTeam({ ...awayTeam, inducements: awayInd });
+
+    // Prayers and Desperate Measures are rolled here, once, at the last moment
+    // before the match exists — so both coaches see the same result and neither
+    // can re-roll them by leaving the room. Player-buff prayers are baked into
+    // the team def; the rest ride along as keys for webbb to act on.
+    // Dev-only override so the random tables can be tested on demand:
+    //   BB_FORCE_PRAYERS=treacherousTrapdoor,molesUnderPitch ./dev
+    //   BB_FORCE_PRAYERS_AWAY=underScrutiny   (per-side; falls back to both)
+    // Only ever applied to a side that actually bought at least one Prayer.
+    const forced = (side) => {
+        const raw = process.env[`BB_FORCE_PRAYERS_${side.toUpperCase()}`] || process.env.BB_FORCE_PRAYERS;
+        if (!raw) return null;
+        const keys = raw.split(',').map(k => k.trim()).filter(Boolean)
+            .filter(k => PRAYERS_TO_NUFFLE.some(p => p.key === k));
+        return keys.length ? keys : null;
+    };
+
+    const prayerLog = [];
+    for (const [def, ind, side] of [[homeTeamDef, homeInd, 'home'], [awayTeamDef, awayInd, 'away']]) {
+        const bought = ind.prayersToNuffle || 0;
+        const force  = bought > 0 ? forced(side) : null;
+        if (force) console.log(`Room ${roomId}: FORCED prayers for ${side} — ${force.join(', ')}`);
+        def.prayers           = force || rollD8Table(PRAYERS_TO_NUFFLE, bought);
+        def.desperateMeasures = rollD8Table(DESPERATE_MEASURES, ind.desperateMeasures || 0);
+        prayerLog.push(...applyPrayers(def, def.prayers));
+    }
+    if (prayerLog.length) {
+        for (const line of prayerLog) console.log(`Room ${roomId}: ${line}`);
+        broadcast(roomId, 'prayers', { log: prayerLog });
+    }
+
+    const homeToken   = makeToken(room.home_user_id, room.home_username, homeTeamDef);
+    const awayToken   = makeToken(room.away_user_id, room.away_username, awayTeamDef);
+
+    // Register the game room server-to-server BEFORE redirecting either browser.
+    // The room then exists before anyone connects, so there is no create/join
+    // race — each player just attaches to their slot. Only once webbb confirms
+    // do we push the launch URLs (no action param needed — the token's userId
+    // identifies the side).
+    const regBody = JSON.stringify({
+        roomId,
+        home: { userId: room.home_user_id, username: room.home_username, teamDef: homeTeamDef },
+        away: { userId: room.away_user_id, username: room.away_username, teamDef: awayTeamDef },
+    });
+    fetch(`${base}/internal/match`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-BB-Signature': sign(regBody) },
+        body:    regBody,
+    })
+        .then(r => {
+            if (!r.ok) throw new Error(`webbb returned ${r.status}`);
+            sendTo(roomId, room.home_user_id, 'launch', { url: `${base}?token=${homeToken}&roomId=${roomId}` });
+            sendTo(roomId, room.away_user_id, 'launch', { url: `${base}?token=${awayToken}&roomId=${roomId}` });
+            // Tell any watchers (who don't get the per-player launch URL) that the
+            // game has begun, so they can switch to spectating it.
+            broadcast(roomId, 'started', { origin: base, roomId });
+            // Room and messages stay alive; cleanup happens when all SSE clients disconnect.
+        })
+        .catch(e => {
+            console.error(`Match registration failed for room ${roomId}:`, e.message);
+            broadcast(roomId, 'launch_failed', { error: 'Could not start the game — try readying up again.' });
+        });
+}
+
+// ── League Play: petty cash and inducements ───────────────────────
+// Both coaches are ready, so both CTVs are known and fixed. The book's order:
+// the higher-CTV coach spends Treasury first, then the lower-CTV coach receives
+// Petty Cash equal to the CTV gap plus whatever the first coach spent, and may
+// top that up with at most 50,000 of their own gold. Only then does the match
+// launch. With equal CTVs there is no underdog and no petty cash — each coach
+// simply spends their own Treasury.
+
+// CTV of whichever team a side currently has picked, or 0 if none yet.
+function liveTV(room, side) {
+    const teamId = side === 'home' ? room.team_id      : room.away_team_id;
+    const userId = side === 'home' ? room.home_user_id : room.away_user_id;
+    if (!teamId || !userId) return 0;
+    const t = getTeamForUser(teamId, userId);
+    return t ? teamValue(t.race, t.roster, parseExtras(t.extras)) : 0;
+}
+
+// Freeze both CTVs and hand the first turn to the richer coach.
+function openInducements(roomId, room) {
+    const homeTeam = getTeamForUser(room.team_id,      room.home_user_id);
+    const awayTeam = getTeamForUser(room.away_team_id, room.away_user_id);
+    if (!homeTeam || !awayTeam) return;
+
+    const homeTV = teamValue(homeTeam.race, homeTeam.roster, parseExtras(homeTeam.extras));
+    const awayTV = teamValue(awayTeam.race, awayTeam.roster, parseExtras(awayTeam.extras));
+    const first  = awayTV > homeTV ? 'away' : 'home';   // ties: home goes first
+
+    db.prepare(`UPDATE pending_rooms SET home_tv = ?, away_tv = ?, inducement_turn = ?,
+                home_inducements = NULL, away_inducements = NULL,
+                home_treasury_spend = 0, away_treasury_spend = 0 WHERE id = ?`)
+        .run(homeTV, awayTV, first, roomId);
+
+    broadcast(roomId, 'inducements', { homeTV, awayTV, turn: first });
+}
+
+function parseExtras(raw) {
+    if (raw && typeof raw === 'object') return raw;
+    try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+}
+
+function parseInducements(raw) {
+    try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+}
+
+// What `side` may spend right now, and on what.
+function inducementStateFor(room, side) {
+    const other      = side === 'home' ? 'away' : 'home';
+    const myTV       = room[`${side}_tv`]  || 0;
+    const theirTV    = room[`${other}_tv`] || 0;
+    const teamId     = side === 'home' ? room.team_id      : room.away_team_id;
+    const userId     = side === 'home' ? room.home_user_id : room.away_user_id;
+    const team       = getTeamForUser(teamId, userId);
+    if (!team) return null;
+
+    // The first coach to buy sees no opponent spend yet; the second sees it.
+    const theirSpend = room[`${other}_treasury_spend`] || 0;
+    const budget     = inducementBudget(myTV, theirTV, theirSpend, team.treasury || 0);
+
+    return {
+        side, race: team.race, myTV, theirTV,
+        teamName:   team.name,
+        underdog:   budget.petty > 0,
+        treasury:   team.treasury || 0,
+        petty:      budget.petty,
+        // Where the petty cash came from, so the number is never a mystery.
+        pettyGap:   Math.max(0, theirTV - myTV),
+        pettyFromOpponent: theirSpend,
+        treasuryCap: budget.fromTreasury,
+        topUpLimit: budget.petty > 0 ? PETTY_CASH_TOP_UP : null,
+        total:      budget.total,
+        turn:       room.inducement_turn,
+        bought:     parseInducements(room[`${side}_inducements`]),
+        // What the opponent has already bought, once they have committed. The
+        // rules put the richer coach first precisely so the underdog can react.
+        opponentBought: room[`${other}_inducements`] ? parseInducements(room[`${other}_inducements`]) : null,
+        catalogue:  availableInducements(team.race).map(ind => ({
+            key: ind.key, label: ind.label, max: ind.max, text: ind.text || '',
+            cost: inducementCost(team.race, ind), implemented: !!ind.implemented,
+            discounted: inducementCost(team.race, ind) < ind.cost,
+        })),
+    };
+}
+
+function sideOf(room, userId) {
+    if (room.home_user_id === userId) return 'home';
+    if (room.away_user_id === userId) return 'away';
+    return null;
+}
+
+// ── GET /api/room/:id/inducements — what can I buy, and is it my turn?
+router.get('/room/:id/inducements', requireAuth, (req, res) => {
+    const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    const side = sideOf(room, req.session.userId);
+    if (!side) return res.status(403).json({ error: 'Not in this room' });
+    const state = inducementStateFor(room, side);
+    if (!state) return res.status(400).json({ error: 'Team not found' });
+    res.json(state);
+});
+
+// ── POST /api/room/:id/inducements — commit this coach's purchase ──
+router.post('/room/:id/inducements', requireAuth, (req, res) => {
+    const room = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    const side = sideOf(room, req.session.userId);
+    if (!side) return res.status(403).json({ error: 'Not in this room' });
+    if (room.inducement_turn !== side) return res.status(409).json({ error: 'Not your turn to buy' });
+
+    const state = inducementStateFor(room, side);
+    if (!state) return res.status(400).json({ error: 'Team not found' });
+
+    // Keep only inducements this race may take, as non-negative integers, and
+    // clamp to the rulebook maximum. Unlike drafting — where the coaches are
+    // free to agree anything (see team.js) — these limits are enforced: this is
+    // a real budget, and part of it is the opponent's gold.
+    const raw    = req.body.inducements && typeof req.body.inducements === 'object' ? req.body.inducements : {};
+    const bought = {};
+    for (const ind of state.catalogue) {
+        const n = Math.max(0, Math.min(ind.max, Math.floor(Number(raw[ind.key]) || 0)));
+        if (n) bought[ind.key] = n;
+    }
+
+    // Unlike drafting, this one IS enforced: petty cash is a hard budget, and a
+    // coach who overspends here is taking gold that does not exist.
+    const spend = inducementsCost(state.race, bought);
+    if (spend > state.total) {
+        return res.status(400).json({ error: `That costs ${spend.toLocaleString()} gp — you have ${state.total.toLocaleString()}` });
+    }
+
+    // Petty cash is spent first; only the remainder comes out of Treasury.
+    const fromTreasury = Math.max(0, spend - state.petty);
+    db.prepare(`UPDATE pending_rooms SET ${side}_inducements = ?, ${side}_treasury_spend = ? WHERE id = ?`)
+        .run(JSON.stringify(bought), fromTreasury, req.params.id);
+
+    const after = db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id);
+    const other = side === 'home' ? 'away' : 'home';
+
+    // Announce it: the underdog is entitled to know what the richer coach
+    // bought, since their petty cash depends on it.
+    const bill = state.catalogue
+        .filter(c => bought[c.key])
+        .map(c => `${bought[c.key]}x ${c.label}`)
+        .join(', ');
+    broadcast(req.params.id, 'inducements_bought', {
+        side, teamName: state.teamName,
+        summary: bill || 'nothing',
+        spent: spend,
+    });
+
+    // First coach done → hand over. Second coach done → launch.
+    if (after[`${other}_inducements`] === null) {
+        db.prepare('UPDATE pending_rooms SET inducement_turn = ? WHERE id = ?').run(other, req.params.id);
+        broadcast(req.params.id, 'inducements', {
+            homeTV: after.home_tv, awayTV: after.away_tv, turn: other,
+        });
+    } else {
+        db.prepare('UPDATE pending_rooms SET inducement_turn = NULL WHERE id = ?').run(req.params.id);
+        broadcast(req.params.id, 'inducements', {
+            homeTV: after.home_tv, awayTV: after.away_tv, turn: null,
+        });
+        launchMatch(req.params.id, db.prepare('SELECT * FROM pending_rooms WHERE id = ?').get(req.params.id));
+    }
+
+    res.json({ ok: true, spent: spend, fromTreasury });
 });
 
 module.exports = router;

@@ -8,7 +8,7 @@ let editingTeamId    = null;   // null = new team, number = editing existing
 let selectedHomeCol  = null;   // [r,g,b]
 let selectedAwayCol  = null;   // [r,g,b]
 let extras           = defaultExtras();
-let inducements      = {};
+let treasury         = 0;
 
 // Every team starts with one Dedicated Fan — that is the rulebook floor, not a
 // purchase. Bribes are absent on purpose: they are an inducement, bought per
@@ -651,7 +651,8 @@ function showBuilder(existingTeam) {
         selectedHomeCol = existingTeam.homeColour || null;
         selectedAwayCol = existingTeam.awayColour || null;
         extras          = { ...defaultExtras(), ...(existingTeam.extras || {}) };
-        inducements     = { ...(existingTeam.inducements || {}) };
+        treasury        = existingTeam.treasury || 0;
+        document.getElementById('team-treasury').value = treasury;
         document.getElementById('team-name').value        = existingTeam.name;
         document.getElementById('step-race').hidden       = true;
         document.getElementById('step-roster').hidden     = false;
@@ -661,7 +662,6 @@ function showBuilder(existingTeam) {
         renderPositions();
         renderColourPickers();
         renderExtras();
-    renderInducements();
         updateTeamValue();
     } else {
         selectedRace    = null;
@@ -669,7 +669,8 @@ function showBuilder(existingTeam) {
         selectedHomeCol = null;
         selectedAwayCol = null;
         extras          = defaultExtras();
-        inducements     = {};
+        treasury        = 0;
+        document.getElementById('team-treasury').value = 0;
         document.getElementById('step-race').hidden       = false;
         document.getElementById('step-roster').hidden     = true;
         renderRaceCards();
@@ -702,6 +703,12 @@ function renderSpecialRules(race) {
 
 document.getElementById('btn-builder-back').addEventListener('click', () => showTeams());
 
+// Treasury is coach-maintained — bbauth does no league bookkeeping, but petty
+// cash cannot be worked out without knowing each side's gold.
+document.getElementById('team-treasury').addEventListener('input', e => {
+    treasury = Math.max(0, Math.floor(Number(e.target.value) || 0));
+});
+
 function renderRaceCards() {
     const container = document.getElementById('race-cards');
     container.innerHTML = '';
@@ -730,7 +737,8 @@ function selectRace(race) {
     selectedHomeCol = null;
     selectedAwayCol = null;
     extras          = defaultExtras();
-    inducements     = {};
+    treasury        = 0;
+    document.getElementById('team-treasury').value = 0;
     document.getElementById('team-name').value    = '';
     document.getElementById('step-race').hidden   = true;
     document.getElementById('step-roster').hidden = false;
@@ -740,7 +748,6 @@ function selectRace(race) {
     renderPositions();
     renderColourPickers();
     renderExtras();
-    renderInducements();
     updateTeamValue();
 }
 
@@ -925,7 +932,7 @@ function arrEq(a, b) {
 // gold but add no TV).
 function updateTeamValue() {
     const tv    = teamValue(selectedRace, roster, extras);
-    const spent = teamCost(selectedRace, roster, extras, inducements);
+    const spent = teamCost(selectedRace, roster, extras);
     document.getElementById('tv-value').textContent = formatTV(tv);
     document.getElementById('tv-spent').textContent = `${spent.toLocaleString()} gp spent`;
 }
@@ -970,43 +977,6 @@ function renderExtras() {
     list.appendChild(apRow);
 }
 
-// ── Inducements ────────────────────────────────────────────────────
-// Matched Play buys these at drafting, out of the same budget. They never add
-// to TV, so the whole section is labelled that way rather than tagging rows.
-function renderInducements() {
-    const list = document.getElementById('inducements-list');
-    if (!list) return;
-    list.innerHTML = '';
-
-    availableInducements(selectedRace).forEach(ind => {
-        const count = inducements[ind.key] || 0;
-        const cost  = inducementCost(selectedRace, ind);
-        const cut   = cost < ind.cost;   // a special rule discounted it
-        const row = document.createElement('div');
-        row.className = 'extra-row';
-        row.innerHTML = `
-            <span class="extra-label${ind.implemented ? '' : ' extra-label--parked'}">${ind.label}${
-                ind.implemented ? '' : ' <em class="extra-no-tv">not in play yet</em>'}</span>
-            <span class="extra-cost">${cost.toLocaleString()} gp${
-                cut ? ` <em class="extra-no-tv" title="${ind.discountRule}">−</em>` : ''}</span>
-            <span class="extra-stepper">
-                <button type="button" class="extra-minus" ${count <= 0 ? 'disabled' : ''}>−</button>
-                <span class="extra-count">${count}</span>
-                <button type="button" class="extra-plus">+</button>
-            </span>`;
-        row.querySelector('.extra-minus').addEventListener('click', () => {
-            inducements[ind.key] = count - 1;
-            if (inducements[ind.key] <= 0) delete inducements[ind.key];
-            renderInducements(); updateTeamValue();
-        });
-        row.querySelector('.extra-plus').addEventListener('click', () => {
-            inducements[ind.key] = count + 1;
-            renderInducements(); updateTeamValue();
-        });
-        list.appendChild(row);
-    });
-}
-
 // ── Save team ──────────────────────────────────────────────────────
 document.getElementById('btn-save-team').addEventListener('click', async () => {
     const name = document.getElementById('team-name').value.trim();
@@ -1022,7 +992,7 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
     const method = editingTeamId ? 'PUT' : 'POST';
     const path   = editingTeamId ? `/api/teams/${editingTeamId}` : '/api/teams';
     const data   = await api(method, path, {
-        name, race: selectedRace, roster, extras, inducements,
+        name, race: selectedRace, roster, extras, treasury,
         homeColour: selectedHomeCol,
         awayColour: selectedAwayCol,
     });
@@ -1031,6 +1001,240 @@ document.getElementById('btn-save-team').addEventListener('click', async () => {
     } else {
         showTeams();
     }
+});
+
+// ── League Play: petty cash and inducements ────────────────────────
+// Runs in the staging room once both coaches are ready, before the match
+// launches. The richer coach buys first out of Treasury; the underdog then gets
+// the CTV gap plus whatever the richer coach spent, and may add up to 50,000 of
+// their own. The server is the authority on all of it — this only draws it.
+let _inducementState = null;   // server state for my side, or null when not buying
+let _indBuying       = {};     // {key: count} being assembled
+
+function hideInducements() {
+    _inducementState = null;
+    _indBuying = {};
+    const el = document.getElementById('room-inducements');
+    if (el) el.hidden = true;
+}
+
+// Team Value alongside each team in the matchup band. This lives in the band
+// rather than a panel of its own because the staging room is a fixed-height
+// layout with no scroll to spare — see #view-room in style.css.
+function renderRoomTV(homeTV, awayTV) {
+    const h = document.getElementById('room-home-tv');
+    const a = document.getElementById('room-away-tv');
+    if (!h || !a) return;
+    const set = (el, tv, under) => {
+        el.textContent = tv ? `TV ${formatTV(tv)}` : '';
+        el.classList.toggle('room-player-tv--under', !!under);
+        el.title = under ? 'Lower CTV — receives Petty Cash before kick-off' : '';
+    };
+    set(h, homeTV, homeTV && awayTV && homeTV < awayTV);
+    set(a, awayTV, homeTV && awayTV && awayTV < homeTV);
+}
+
+// The CTV line inside the overlay, drawn while buying.
+function renderCtvBar(homeTV, awayTV) {
+    const el = document.getElementById('inducement-ctv');
+    if (!el || !homeTV || !awayTV) { if (el) el.innerHTML = ''; return; }
+    const gap   = Math.abs(homeTV - awayTV);
+    const under = homeTV === awayTV ? null : (homeTV < awayTV ? 'home' : 'away');
+    const cell  = (side, tv) =>
+        `<span class="ctv-cell${under === side ? ' ctv-under' : ''}">
+            <i>${side}</i><b>${formatTV(tv)}</b></span>`;
+    el.innerHTML = cell('home', homeTV) + cell('away', awayTV)
+        + `<span class="ctv-gap">${under
+            ? `${under.toUpperCase()} is ${formatTV(gap)} behind — Petty Cash`
+            : 'level — no Petty Cash'}</span>`;
+}
+
+async function onInducementsEvent(d) {
+    const panel = document.getElementById('room-inducements');
+    if (_spectating) { panel.hidden = true; return; }
+
+    if (!d.turn) { hideInducements(); return; }   // both done — launch follows
+
+    const mySide = _isHomeInRoom ? 'home' : 'away';
+    panel.hidden = false;
+    renderRoomTV(d.homeTV, d.awayTV);
+    renderCtvBar(d.homeTV, d.awayTV);
+    document.getElementById('inducement-title').textContent = 'Inducements';
+
+    if (d.turn !== mySide) {
+        // Not my turn. Keep whatever I already bought on screen rather than
+        // blanking the panel — the wait is otherwise a void. The state is kept
+        // (not nulled) purely so the recap can still resolve labels.
+        document.getElementById('inducement-turnstate').textContent =
+            `${d.turn.toUpperCase()} is buying…`;
+        document.getElementById('inducement-status').textContent =
+            Object.keys(_indBuying).length
+                ? 'Your purchase is locked in. Waiting for your opponent.'
+                : 'Waiting for your opponent to buy first — their spending adds to your Petty Cash.';
+        document.getElementById('inducement-budget').hidden = true;
+        document.getElementById('inducement-foot').hidden   = true;
+        renderBoughtList();
+        return;
+    }
+
+    document.getElementById('inducement-turnstate').textContent = 'your turn';
+    const state = await api('GET', `/api/room/${_currentRoomId}/inducements`);
+    if (state.error) {
+        document.getElementById('inducement-status').textContent = state.error;
+        return;
+    }
+    _inducementState = state;
+    _indBuying = { ...(state.bought || {}) };
+    renderInducementPanel();
+}
+
+// The running basket in the aside — what is currently picked, and the bill.
+function renderBasket(st, spent) {
+    const el = document.getElementById('inducement-basket');
+    if (!el) return;
+    const gp   = n => n.toLocaleString();
+    const rows = st.catalogue.filter(i => _indBuying[i.key]);
+    el.innerHTML = '<div class="ind-subhead">Your purchase</div>'
+        + (rows.length
+            ? rows.map(i => `<div class="ind-basket-line"><span>${i.label} ×${_indBuying[i.key]}</span><b>${
+                gp(i.cost * _indBuying[i.key])}</b></div>`).join('')
+              + `<div class="ind-basket-line purse-total"><span>total</span><b>${gp(spent)}</b></div>`
+            : '<div class="ind-basket-empty">Nothing selected.</div>');
+}
+
+// A read-only recap of what I bought, shown while waiting.
+function renderBoughtList() {
+    const list   = document.getElementById('inducement-list');
+    const basket = document.getElementById('inducement-basket');
+    const keys   = Object.keys(_indBuying);
+    if (list) list.innerHTML = '';
+    if (!basket) return;
+    basket.innerHTML = '<div class="ind-subhead">Your purchase</div>'
+        + (keys.length
+            ? keys.map(k => `<div class="ind-basket-line"><span>${_indLabel(k)} ×${_indBuying[k]}</span></div>`).join('')
+            : '<div class="ind-basket-empty">Nothing bought.</div>');
+}
+
+function _indLabel(key) {
+    const c = _inducementState?.catalogue?.find(i => i.key === key);
+    return c ? c.label : key;
+}
+
+function renderInducementPanel() {
+    const st = _inducementState;
+    if (!st) return;
+    const gp = n => n.toLocaleString();
+
+    document.getElementById('inducement-status').textContent = st.underdog
+        ? 'You are the underdog. Petty Cash must be spent now — whatever is left over is lost.'
+        : 'You have the higher CTV, so you buy first, out of your Treasury.';
+
+    // The purse, itemised. The underdog's total is built from two or three
+    // sources and the arithmetic should never be a mystery.
+    const spent     = st.catalogue.reduce((sum, i) => sum + (_indBuying[i.key] || 0) * i.cost, 0);
+    const remaining = st.total - spent;
+
+    const purse = document.getElementById('inducement-budget');
+    purse.hidden = false;
+    const lines = [];
+    if (st.underdog) {
+        lines.push(`<span class="purse-line"><i>CTV gap</i><b>${gp(st.pettyGap)}</b></span>`);
+        if (st.pettyFromOpponent)
+            lines.push(`<span class="purse-line"><i>they spent</i><b>${gp(st.pettyFromOpponent)}</b></span>`);
+        lines.push(`<span class="purse-line"><i>Petty Cash</i><b>${gp(st.petty)}</b></span>`);
+    }
+    lines.push(`<span class="purse-line"><i>Treasury${
+        st.topUpLimit ? ` (max ${gp(st.topUpLimit)})` : ''}</i><b>${gp(st.treasuryCap)}</b></span>`);
+    purse.innerHTML = lines.join('')
+        + `<span class="purse-line purse-total"><i>to spend</i><b>${gp(st.total)}</b></span>`
+        + `<span class="purse-line"><i>remaining</i><b>${gp(remaining)}</b></span>`;
+
+    renderBasket(st, spent);
+
+    // Working ones first; the rest are listed but visibly parked.
+    const order = [...st.catalogue].sort((a, b) =>
+        (b.implemented - a.implemented) || (a.cost - b.cost));
+
+    const list = document.getElementById('inducement-list');
+    list.innerHTML = '';
+    let parkedHeaderDone = false;
+    order.forEach(ind => {
+        if (!ind.implemented && !parkedHeaderDone) {
+            parkedHeaderDone = true;
+            const h = document.createElement('div');
+            h.className = 'ind-subhead';
+            h.textContent = 'Not yet active in play';
+            list.appendChild(h);
+        }
+        const count      = _indBuying[ind.key] || 0;
+        const affordable = ind.cost <= remaining;
+        const row = document.createElement('div');
+        row.className = 'ind-row' + (count ? ' ind-row--taken' : '') + (ind.implemented ? '' : ' ind-row--parked');
+        row.innerHTML = `
+            <span class="ind-main">
+                <span class="ind-name">${ind.label}${
+                    ind.discounted ? ' <em class="ind-tag">half price</em>' : ''}</span>
+                <span class="ind-desc">${ind.text || ''}</span>
+            </span>
+            <span class="ind-cost">${gp(ind.cost)}</span>
+            <span class="extra-stepper">
+                <button type="button" class="extra-minus" ${count <= 0 ? 'disabled' : ''}>−</button>
+                <span class="extra-count">${count}</span>
+                <button type="button" class="extra-plus" ${
+                    count >= ind.max || !affordable ? 'disabled' : ''}>+</button>
+            </span>`;
+        row.querySelector('.extra-minus').addEventListener('click', () => {
+            _indBuying[ind.key] = count - 1;
+            if (_indBuying[ind.key] <= 0) delete _indBuying[ind.key];
+            renderInducementPanel();
+        });
+        row.querySelector('.extra-plus').addEventListener('click', () => {
+            _indBuying[ind.key] = count + 1;
+            renderInducementPanel();
+        });
+        list.appendChild(row);
+    });
+
+    // The + buttons already prevent overspending, so this only ever counts down.
+    const foot = document.getElementById('inducement-foot');
+    foot.hidden = false;
+    document.getElementById('inducement-spent').innerHTML =
+        `<b>${gp(remaining)}</b> gp left${
+            st.underdog && remaining > 0 ? ' <em class="ind-tag">unspent Petty Cash is lost</em>' : ''}`;
+    document.getElementById('btn-inducements-confirm').disabled = false;
+    document.getElementById('btn-inducements-confirm').textContent =
+        spent > 0 ? `Confirm — ${gp(spent)} gp` : 'Buy nothing';
+}
+
+// Backing out un-readies this coach, which is what cancels the step server-side
+// (see the ready route). Both baskets are cleared: if either team changes, the
+// CTV gap and therefore the whole Petty Cash calculation changes with it.
+document.getElementById('btn-inducements-back').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-inducements-back');
+    btn.disabled = true;
+    const r = await api('POST', `/api/room/${_currentRoomId}/ready`);
+    btn.disabled = false;
+    if (r && r.error) {
+        document.getElementById('inducement-status').textContent = r.error;
+        return;
+    }
+    hideInducements();
+});
+
+document.getElementById('btn-inducements-confirm').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-inducements-confirm');
+    btn.disabled = true;
+    const r = await api('POST', `/api/room/${_currentRoomId}/inducements`, { inducements: _indBuying });
+    if (r.error) {
+        document.getElementById('inducement-status').textContent = r.error;
+        btn.disabled = false;
+        return;
+    }
+    document.getElementById('inducement-status').textContent = 'Purchase confirmed — waiting for your opponent…';
+    document.getElementById('inducement-turnstate').textContent = 'done';
+    document.getElementById('inducement-foot').hidden   = true;
+    document.getElementById('inducement-budget').hidden = true;
+    renderBoughtList();
 });
 
 // ── Staging room ───────────────────────────────────────────────────
@@ -1070,6 +1274,11 @@ function connectRoomSSE(roomId) {
     es.addEventListener('init', e => {
         const d = JSON.parse(e.data);
         renderRoomInit(d);
+        renderRoomTV(d.homeTV, d.awayTV);
+        // A refresh mid-purchase drops back into the same step.
+        if (d.inducementTurn) {
+            onInducementsEvent({ homeTV: d.homeTV, awayTV: d.awayTV, turn: d.inducementTurn });
+        }
     });
 
     es.addEventListener('joined', e => {
@@ -1116,6 +1325,7 @@ function connectRoomSSE(roomId) {
     es.addEventListener('team', e => {
         const d = JSON.parse(e.data);
         const isMySide = (d.side === 'home') === _isHomeInRoom;
+        if (d.homeTV !== undefined) renderRoomTV(d.homeTV, d.awayTV);
         if (d.side === 'home') {
             document.getElementById('room-home-team').textContent = `${d.teamName} · ${d.race}`;
             document.getElementById('btn-pick-team-home').textContent = 'Change Team';
@@ -1135,6 +1345,30 @@ function connectRoomSSE(roomId) {
     es.addEventListener('ready', e => {
         const d = JSON.parse(e.data);
         updateReadyState(d.homeReady, d.awayReady);
+    });
+
+    es.addEventListener('inducements', e => {
+        onInducementsEvent(JSON.parse(e.data));
+    });
+
+    es.addEventListener('inducements_bought', e => {
+        const d = JSON.parse(e.data);
+        appendSystemMessage(
+            `${d.teamName} bought ${d.summary}${d.spent ? ` for ${d.spent.toLocaleString()} gp` : ''}.`);
+    });
+
+    es.addEventListener('prayers', e => {
+        const { log } = JSON.parse(e.data);
+        log.forEach(line => appendSystemMessage(line));
+    });
+
+    es.addEventListener('inducements_cancelled', e => {
+        hideInducements();
+        let who = '';
+        try { who = (JSON.parse(e.data) || {}).byName || ''; } catch {}
+        appendSystemMessage(who
+            ? `${who} went back to team selection — inducements cancelled.`
+            : 'Inducements cancelled — a coach went back to team selection.');
     });
 
     es.addEventListener('launch', e => {
